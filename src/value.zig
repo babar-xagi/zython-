@@ -46,14 +46,26 @@ pub const PyTuple = struct {
 
 pub const PyDict = struct {
     entries: std.ArrayList(DictEntry),
+    string_map: std.StringHashMap(usize),
 
     pub fn init(allocator: Allocator) !*PyDict {
         const self = try allocator.create(PyDict);
-        self.* = .{ .entries = .empty };
+        self.* = .{
+            .entries = .empty,
+            .string_map = std.StringHashMap(usize).init(allocator),
+        };
         return self;
     }
 
     pub fn get(self: *PyDict, key: Value) ?Value {
+        if (key == .string) {
+            if (self.string_map.get(key.string.bytes)) |idx| {
+                if (idx < self.entries.items.len) {
+                    return self.entries.items[idx].val;
+                }
+            }
+            return null;
+        }
         for (self.entries.items) |entry| {
             if (entry.key.equals(key)) {
                 return entry.val;
@@ -63,6 +75,19 @@ pub const PyDict = struct {
     }
 
     pub fn put(self: *PyDict, allocator: Allocator, key: Value, val: Value) !void {
+        if (key == .string) {
+            if (self.string_map.get(key.string.bytes)) |idx| {
+                if (idx < self.entries.items.len) {
+                    self.entries.items[idx].val = val;
+                    return;
+                }
+            }
+            const idx = self.entries.items.len;
+            try self.entries.append(allocator, .{ .key = key, .val = val });
+            try self.string_map.put(key.string.bytes, idx);
+            return;
+        }
+
         for (self.entries.items) |*entry| {
             if (entry.key.equals(key)) {
                 entry.val = val;
@@ -73,6 +98,9 @@ pub const PyDict = struct {
     }
 
     pub fn remove(self: *PyDict, key: Value) ?Value {
+        if (key == .string) {
+            _ = self.string_map.remove(key.string.bytes);
+        }
         for (self.entries.items, 0..) |entry, i| {
             if (entry.key.equals(key)) {
                 const val = entry.val;

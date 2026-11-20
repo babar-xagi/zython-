@@ -74,3 +74,59 @@ pub fn main(init: std.process.Init) !void {
         std.process.exit(1);
     };
 }
+
+test "lexing python code" {
+    const lexer_mod = @import("lexer.zig");
+    const Lexer = lexer_mod.Lexer;
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    var lex = Lexer.init(a, "x = 42\nif x > 10:\n    print(x)\n");
+    defer lex.deinit();
+
+    const t1 = try lex.nextToken();
+    try std.testing.expectEqual(.identifier, t1.tag);
+    try std.testing.expectEqualStrings("x", t1.lexeme);
+
+    const t2 = try lex.nextToken();
+    try std.testing.expectEqual(.equal, t2.tag);
+
+    const t3 = try lex.nextToken();
+    try std.testing.expectEqual(.int_lit, t3.tag);
+}
+
+test "value operations" {
+    const value_mod = @import("value.zig");
+    const Value = value_mod.Value;
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const v1 = Value.makeInt(10);
+    const v2 = Value.makeInt(20);
+    try std.testing.expect(v1.isTruthy());
+    try std.testing.expect(!Value.makeNone().isTruthy());
+    try std.testing.expect(!v1.equals(v2));
+
+    const s = try Value.makeString(a, "Zython");
+    const rep = try s.repr(a);
+    try std.testing.expectEqualStrings("'Zython'", rep);
+}
+
+test "interpreter execution" {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const interp = try Interpreter.init(a, &[_][:0]const u8{});
+    const code =
+        \\def square(x):
+        \\    return x * x
+        \\result = square(8)
+    ;
+    _ = try interp.evalSource(code);
+    const res = interp.global_env.get("result");
+    try std.testing.expect(res != null);
+    try std.testing.expectEqual(@as(i64, 64), res.?.int);
+}
