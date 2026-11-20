@@ -1,0 +1,156 @@
+const std = @import("std");
+
+pub const TokenType = enum {
+    // Keywords
+    kw_def,
+    kw_return,
+    kw_if,
+    kw_elif,
+    kw_else,
+    kw_while,
+    kw_for,
+    kw_in,
+    kw_is,
+    kw_and,
+    kw_or,
+    kw_not,
+    kw_break,
+    kw_continue,
+    kw_pass,
+    kw_class,
+    kw_import,
+    kw_from,
+    kw_as,
+    kw_try,
+    kw_except,
+    kw_finally,
+    kw_raise,
+    kw_lambda,
+    kw_global,
+    kw_nonlocal,
+    kw_assert,
+    kw_del,
+    kw_true,
+    kw_false,
+    kw_none,
+
+    // Literals
+    int_lit,
+    float_lit,
+    string_lit,
+    identifier,
+
+    // Operators
+    plus,
+    minus,
+    star,
+    slash,
+    slash_slash,
+    percent,
+    star_star,
+    ampersand,
+    pipe,
+    caret,
+    tilde,
+    lshift,
+    rshift,
+
+    // Assignment
+    equal,
+    plus_equal,
+    minus_equal,
+    star_equal,
+    slash_equal,
+    slash_slash_equal,
+    percent_equal,
+    star_star_equal,
+    amp_equal,
+    pipe_equal,
+    caret_equal,
+    lshift_equal,
+    rshift_equal,
+
+    // Comparisons
+    equal_equal,
+    not_equal,
+    less,
+    less_equal,
+    greater,
+    greater_equal,
+
+    // Delimiters
+    lparen,
+    rparen,
+    lbracket,
+    rbracket,
+    lbrace,
+    rbrace,
+    colon,
+    comma,
+    dot,
+    semicolon,
+    arrow,
+
+    // Layout
+    newline,
+    indent,
+    dedent,
+    eof,
+};
+
+pub const Token = struct {
+    tag: TokenType,
+    lexeme: []const u8,
+    line: usize,
+    column: usize,
+
+    pub fn format(
+        self: Token,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+        try writer.print("{s}('{s}') at {d}:{d}", .{
+            @tagName(self.tag),
+            self.lexeme,
+            self.line,
+            self.column,
+        });
+    }
+};
+
+pub const keywords = std.StaticStringMap(TokenType).initComptime(.{
+    .{ "def", .kw_def },
+    .{ "return", .kw_return },
+    .{ "if", .kw_if },
+    .{ "elif", .kw_elif },
+    .{ "else", .kw_else },
+    .{ "while", .kw_while },
+    .{ "for", .kw_for },
+    .{ "in", .kw_in },
+    .{ "is", .kw_is },
+    .{ "and", .kw_and },
+    .{ "or", .kw_or },
+    .{ "not", .kw_not },
+    .{ "break", .kw_break },
+    .{ "continue", .kw_continue },
+    .{ "pass", .kw_pass },
+    .{ "class", .kw_class },
+    .{ "import", .kw_import },
+    .{ "from", .kw_from },
+    .{ "as", .kw_as },
+    .{ "try", .kw_try },
+    .{ "except", .kw_except },
+    .{ "finally", .kw_finally },
+    .{ "raise", .kw_raise },
+    .{ "lambda", .kw_lambda },
+    .{ "global", .kw_global },
+    .{ "nonlocal", .kw_nonlocal },
+    .{ "assert", .kw_assert },
+    .{ "del", .kw_del },
+    .{ "True", .kw_true },
+    .{ "False", .kw_false },
+    .{ "None", .kw_none },
+});
