@@ -12,6 +12,7 @@
 **A clean, memory-safe, ultra-high-throughput Python interpreter engineered from the ground up in pure Zig 0.17.**
 
 [Overview](#-overview) •
+[Installation & User Guide](docs/user_guide.md) •
 [Key Innovations](#-key-architectural-innovations) •
 [Benchmarks](#-real-world-empirical-benchmarks) •
 [Language Support](#-language-features--compatibility) •
