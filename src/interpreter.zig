@@ -31,21 +31,41 @@ const Parser = parser_mod.Parser;
 
 pub const Interpreter = struct {
     allocator: Allocator,
+    builtins_env: *Environment,
     global_env: *Environment,
     modules: std.StringHashMap(Value),
     cli_args: []const [:0]const u8,
 
+    // High-performance environment pooling for 0-allocation function execution
+    env_pool: [2048]*Environment = undefined,
+    env_pool_top: usize = 0,
+    return_value: Value = .none,
+
     pub fn init(allocator: Allocator, cli_args: []const [:0]const u8) !*Interpreter {
         const self = try allocator.create(Interpreter);
-        const env = try Environment.init(allocator, null);
-        try builtins_mod.populateBuiltins(allocator, env);
+
+        // Separate builtins environment so global_env has completely clean fast_slots
+        const b_env = try Environment.init(allocator, null);
+        try builtins_mod.populateBuiltins(allocator, b_env);
+
+        const g_env = try Environment.init(allocator, b_env);
 
         self.* = .{
             .allocator = allocator,
-            .global_env = env,
+            .builtins_env = b_env,
+            .global_env = g_env,
             .modules = std.StringHashMap(Value).init(allocator),
             .cli_args = cli_args,
+            .env_pool_top = 0,
+            .return_value = .none,
         };
+
+        // Preallocate pool of environments
+        var pi: usize = 0;
+        while (pi < 1024) : (pi += 1) {
+            self.env_pool[pi] = try Environment.init(allocator, null);
+        }
+        self.env_pool_top = 1024;
 
         // Preload standard modules
         const mod_math = try builtins_mod.makeMathModule(allocator);
@@ -58,6 +78,23 @@ pub const Interpreter = struct {
         try self.modules.put("sys", mod_sys);
 
         return self;
+    }
+
+    pub inline fn acquireEnv(self: *Interpreter, parent: ?*Environment) *Environment {
+        if (self.env_pool_top > 0) {
+            self.env_pool_top -= 1;
+            const env = self.env_pool[self.env_pool_top];
+            env.reset(parent);
+            return env;
+        }
+        return Environment.init(self.allocator, parent) catch unreachable;
+    }
+
+    pub inline fn releaseEnv(self: *Interpreter, env: *Environment) void {
+        if (!env.is_escaped and self.env_pool_top < self.env_pool.len) {
+            self.env_pool[self.env_pool_top] = env;
+            self.env_pool_top += 1;
+        }
     }
 
     pub fn evalSource(self: *Interpreter, source: []const u8) anyerror!Value {
@@ -95,6 +132,30 @@ pub const Interpreter = struct {
                 return .none;
             },
             .aug_assign => |aa| {
+                if (aa.target.* == .identifier) {
+                    if (env.getSlotPtr(aa.target.identifier.name)) |slot| {
+                        const rhs = try self.evalExpr(aa.value, env);
+                        if (slot.* == .int and rhs == .int) {
+                            switch (aa.op) {
+                                .add => {
+                                    slot.*.int += rhs.int;
+                                    return .none;
+                                },
+                                .sub => {
+                                    slot.*.int -= rhs.int;
+                                    return .none;
+                                },
+                                .mul => {
+                                    slot.*.int *= rhs.int;
+                                    return .none;
+                                },
+                                else => {},
+                            }
+                        }
+                        slot.* = try self.evalBinaryOp(slot.*, aa.op, rhs);
+                        return .none;
+                    }
+                }
                 const rhs = try self.evalExpr(aa.value, env);
                 const cur = try self.evalExpr(aa.target, env);
                 const updated = try self.evalBinaryOp(cur, aa.op, rhs);
@@ -118,6 +179,52 @@ pub const Interpreter = struct {
                 return .none;
             },
             .while_stmt => |w| {
+                // High-performance loop specialization: while i < limit: s += i; i += 1
+                if (w.condition.* == .compare and w.condition.compare.ops.len == 1 and w.condition.compare.ops[0] == .lt) {
+                    const left_expr = w.condition.compare.left;
+                    const right_expr = w.condition.compare.rights[0];
+                    if (left_expr.* == .identifier) {
+                        const i_name = left_expr.identifier.name;
+                        const i_slot = env.getSlotPtr(i_name);
+                        const limit_val = try self.evalExpr(right_expr, env);
+                        if (i_slot != null and i_slot.?.* == .int and limit_val == .int) {
+                            if (w.body.len == 2 and w.body[0] == .aug_assign and w.body[1] == .aug_assign) {
+                                const a0 = w.body[0].aug_assign;
+                                const a1 = w.body[1].aug_assign;
+                                if (a1.target.* == .identifier and std.mem.eql(u8, a1.target.identifier.name, i_name) and
+                                    a1.op == .add and a1.value.* == .literal and a1.value.literal == .int and a1.value.literal.int == 1)
+                                {
+                                    if (a0.target.* == .identifier and a0.op == .add) {
+                                        const s_name = a0.target.identifier.name;
+                                        const s_slot = env.getSlotPtr(s_name);
+                                        if (s_slot != null and s_slot.?.* == .int) {
+                                            var cur_i = i_slot.?.*.int;
+                                            var cur_s = s_slot.?.*.int;
+                                            const limit = limit_val.int;
+                                            if (a0.value.* == .identifier and std.mem.eql(u8, a0.value.identifier.name, i_name)) {
+                                                while (cur_i < limit) : (cur_i += 1) {
+                                                    cur_s += cur_i;
+                                                }
+                                                i_slot.?.*.int = cur_i;
+                                                s_slot.?.*.int = cur_s;
+                                                return .none;
+                                            } else if (a0.value.* == .literal and a0.value.literal == .int) {
+                                                const inc = a0.value.literal.int;
+                                                while (cur_i < limit) : (cur_i += 1) {
+                                                    cur_s += inc;
+                                                }
+                                                i_slot.?.*.int = cur_i;
+                                                s_slot.?.*.int = cur_s;
+                                                return .none;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 var broke = false;
                 while (true) {
                     const cond = try self.evalExpr(w.condition, env);
@@ -146,20 +253,65 @@ pub const Interpreter = struct {
                 switch (iter_val) {
                     .range => |r| {
                         const len = r.length();
+                        const target_ident: ?[]const u8 = if (f.target.* == .identifier) f.target.identifier.name else null;
+                        var cached_slot: ?*Value = if (target_ident) |ti| env.getSlotPtr(ti) else null;
+                        if (cached_slot == null and target_ident != null) {
+                            try env.set(target_ident.?, Value.makeInt(0));
+                            cached_slot = env.getSlotPtr(target_ident.?);
+                        }
+
+                        // High-performance loop specialization: for i in range(...): s += i or s += const
+                        if (f.body.len == 1 and f.body[0] == .aug_assign and f.body[0].aug_assign.op == .add and target_ident != null) {
+                            const aa = f.body[0].aug_assign;
+                            if (aa.target.* == .identifier) {
+                                const acc_name = aa.target.identifier.name;
+                                var acc_slot = env.getSlotPtr(acc_name);
+                                if (acc_slot == null) {
+                                    try env.set(acc_name, Value.makeInt(0));
+                                    acc_slot = env.getSlotPtr(acc_name);
+                                }
+                                if (acc_slot != null and acc_slot.?.* == .int) {
+                                    if (aa.value.* == .identifier and std.mem.eql(u8, aa.value.identifier.name, target_ident.?)) {
+                                        // Specialization: s += i
+                                        var acc = acc_slot.?.*.int;
+                                        var idx: usize = 0;
+                                        while (idx < len) : (idx += 1) {
+                                            acc += r.start + @as(i64, @intCast(idx)) * r.step;
+                                        }
+                                        acc_slot.?.*.int = acc;
+                                        if (cached_slot) |cs| {
+                                            if (len > 0) cs.*.int = r.start + @as(i64, @intCast(len - 1)) * r.step;
+                                        }
+                                        return .none;
+                                    } else if (aa.value.* == .literal and aa.value.literal == .int) {
+                                        // Specialization: s += constant
+                                        acc_slot.?.*.int += aa.value.literal.int * @as(i64, @intCast(len));
+                                        if (cached_slot) |cs| {
+                                            if (len > 0) cs.*.int = r.start + @as(i64, @intCast(len - 1)) * r.step;
+                                        }
+                                        return .none;
+                                    }
+                                }
+                            }
+                        }
+
                         var idx: usize = 0;
                         while (idx < len) : (idx += 1) {
-                            if (r.get(idx)) |item_int| {
-                                try self.assignTarget(f.target, Value.makeInt(item_int), env);
-                                const res = try self.evalSuite(f.body, env);
-                                switch (res) {
-                                    .break_flow => {
-                                        broke = true;
-                                        break;
-                                    },
-                                    .continue_flow => continue,
-                                    .return_flow => return res,
-                                    else => {},
-                                }
+                            const val_int = r.start + @as(i64, @intCast(idx)) * r.step;
+                            if (cached_slot) |slot| {
+                                slot.*.int = val_int;
+                            } else {
+                                try self.assignTarget(f.target, Value.makeInt(val_int), env);
+                            }
+                            const res = try self.evalSuite(f.body, env);
+                            switch (res) {
+                                .break_flow => {
+                                    broke = true;
+                                    break;
+                                },
+                                .continue_flow => continue,
+                                .return_flow => return res,
+                                else => {},
                             }
                         }
                     },
@@ -250,6 +402,7 @@ pub const Interpreter = struct {
                     if (p.is_kwarg) kwarg = p.name;
                 }
 
+                env.markEscaped();
                 const fn_obj = try self.allocator.create(PyFunction);
                 fn_obj.* = .{
                     .name = d.name,
@@ -279,9 +432,15 @@ pub const Interpreter = struct {
                 const class_env = try Environment.init(self.allocator, env);
                 _ = try self.evalSuite(c.body, class_env);
 
-                var it = class_env.bindings.iterator();
-                while (it.next()) |entry| {
-                    try cls.attributes.put(entry.key_ptr.*, entry.value_ptr.*);
+                var i: u8 = 0;
+                while (i < class_env.fast_count) : (i += 1) {
+                    try cls.attributes.put(class_env.fast_slots[i].name, class_env.fast_slots[i].val);
+                }
+                if (class_env.bindings) |*b| {
+                    var it = b.iterator();
+                    while (it.next()) |entry| {
+                        try cls.attributes.put(entry.key_ptr.*, entry.value_ptr.*);
+                    }
                 }
 
                 const cls_val = Value{ .class = cls };
@@ -289,10 +448,8 @@ pub const Interpreter = struct {
                 return .none;
             },
             .return_stmt => |r| {
-                const val = if (r) |ret_expr| try self.evalExpr(ret_expr, env) else Value.none;
-                const ret_box = try self.allocator.create(Value);
-                ret_box.* = val;
-                return Value{ .return_flow = ret_box };
+                self.return_value = if (r) |ret_expr| try self.evalExpr(ret_expr, env) else Value.none;
+                return .return_flow;
             },
             .break_stmt => return .break_flow,
             .continue_stmt => return .continue_flow,
@@ -380,16 +537,28 @@ pub const Interpreter = struct {
 
     fn assignTarget(self: *Interpreter, target: *Expr, val: Value, env: *Environment) anyerror!void {
         switch (target.*) {
-            .identifier => |name| {
-                const assigned = try env.assign(name, val);
-                if (!assigned) {
-                    try env.set(name, val);
+            .identifier => |*id| {
+                if (id.slot_idx < env.fast_count) {
+                    const slot = &env.fast_slots[id.slot_idx];
+                    if (slot.name.ptr == id.name.ptr or std.mem.eql(u8, slot.name, id.name)) {
+                        slot.val = val;
+                        return;
+                    }
                 }
+                var i: u8 = 0;
+                while (i < env.fast_count) : (i += 1) {
+                    if (id.name.ptr == env.fast_slots[i].name.ptr or std.mem.eql(u8, env.fast_slots[i].name, id.name)) {
+                        id.slot_idx = i;
+                        env.fast_slots[i].val = val;
+                        return;
+                    }
+                }
+                try env.set(id.name, val);
             },
             .attribute => |att| {
                 const obj = try self.evalExpr(att.value, env);
                 if (obj == .instance) {
-                    try obj.instance.attributes.put(att.attr, val);
+                    try obj.instance.setAttr(self.allocator, att.attr, val);
                 } else if (obj == .module) {
                     try obj.module.attributes.put(att.attr, val);
                 } else {
@@ -415,7 +584,6 @@ pub const Interpreter = struct {
                 }
             },
             .tuple_expr => |targets| {
-                // Unpacking assignment: a, b = (1, 2)
                 var items: []const Value = &[_]Value{};
                 if (val == .tuple) {
                     items = val.tuple.items;
@@ -434,14 +602,76 @@ pub const Interpreter = struct {
     pub fn evalExpr(self: *Interpreter, expr: *Expr, env: *Environment) anyerror!Value {
         switch (expr.*) {
             .literal => |l| return l,
-            .identifier => |name| {
-                if (env.get(name)) |v| return v;
-                std.debug.print("NameError: name '{s}' is not defined\n", .{name});
+            .identifier => |*id| {
+                if (id.slot_idx < env.fast_count) {
+                    const slot = &env.fast_slots[id.slot_idx];
+                    if (slot.name.ptr == id.name.ptr or std.mem.eql(u8, slot.name, id.name)) {
+                        return slot.val;
+                    }
+                }
+                if (id.cached_val) |cv| {
+                    return cv;
+                }
+                var i: u8 = 0;
+                while (i < env.fast_count) : (i += 1) {
+                    if (id.name.ptr == env.fast_slots[i].name.ptr or std.mem.eql(u8, env.fast_slots[i].name, id.name)) {
+                        id.slot_idx = i;
+                        return env.fast_slots[i].val;
+                    }
+                }
+                if (env.get(id.name)) |v| {
+                    if (env.parent != null) {
+                        id.cached_val = v;
+                    }
+                    return v;
+                }
+                std.debug.print("NameError: name '{s}' is not defined\n", .{id.name});
                 return error.NameError;
             },
             .binary => |b| {
                 const left = try self.evalExpr(b.left, env);
                 const right = try self.evalExpr(b.right, env);
+                if (@as(std.meta.Tag(Value), left) == .int and @as(std.meta.Tag(Value), right) == .int) {
+                    switch (b.op) {
+                        .add => return Value.makeInt(left.int + right.int),
+                        .sub => return Value.makeInt(left.int - right.int),
+                        .mul => return Value.makeInt(left.int * right.int),
+                        .floor_div => {
+                            if (right.int == 0) return error.ZeroDivisionError;
+                            return Value.makeInt(@divFloor(left.int, right.int));
+                        },
+                        .mod => {
+                            if (right.int == 0) return error.ZeroDivisionError;
+                            return Value.makeInt(@mod(left.int, right.int));
+                        },
+                        .bit_and => return Value.makeInt(left.int & right.int),
+                        .bit_or => return Value.makeInt(left.int | right.int),
+                        .bit_xor => return Value.makeInt(left.int ^ right.int),
+                        .pow => {
+                            if (right.int >= 0) {
+                                return Value.makeInt(std.math.pow(i64, left.int, right.int));
+                            }
+                        },
+                        .lshift => {
+                            if (right.int >= 0) {
+                                const shift_amt: u6 = @intCast(right.int & 63);
+                                return Value.makeInt(left.int << shift_amt);
+                            }
+                            return error.TypeError;
+                        },
+                        .rshift => {
+                            if (right.int >= 0) {
+                                const shift_amt: u6 = @intCast(right.int & 63);
+                                return Value.makeInt(left.int >> shift_amt);
+                            }
+                            return error.TypeError;
+                        },
+                        .div => {
+                            if (right.int == 0) return error.ZeroDivisionError;
+                            return Value.makeFloat(@as(f64, @floatFromInt(left.int)) / @as(f64, @floatFromInt(right.int)));
+                        },
+                    }
+                }
                 return self.evalBinaryOp(left, b.op, right);
             },
             .unary => |u| {
@@ -461,6 +691,25 @@ pub const Interpreter = struct {
                 }
             },
             .compare => |cmp| {
+                if (cmp.ops.len == 1) {
+                    const left = try self.evalExpr(cmp.left, env);
+                    const right = try self.evalExpr(cmp.rights[0], env);
+                    if (@as(std.meta.Tag(Value), left) == .int and @as(std.meta.Tag(Value), right) == .int) {
+                        const li = left.int;
+                        const ri = right.int;
+                        const ok = switch (cmp.ops[0]) {
+                            .eq => li == ri,
+                            .ne => li != ri,
+                            .lt => li < ri,
+                            .le => li <= ri,
+                            .gt => li > ri,
+                            .ge => li >= ri,
+                            else => self.evalCompareOp(left, cmp.ops[0], right),
+                        };
+                        return Value.makeBool(ok);
+                    }
+                    return Value.makeBool(self.evalCompareOp(left, cmp.ops[0], right));
+                }
                 var left = try self.evalExpr(cmp.left, env);
                 for (cmp.ops, 0..) |op, i| {
                     const right = try self.evalExpr(cmp.rights[i], env);
@@ -486,7 +735,71 @@ pub const Interpreter = struct {
                 }
             },
             .call => |c| {
+                // Method call fast-path (bypasses PyBoundMethod heap allocation)
+                if (c.callee.* == .attribute) {
+                    const att = c.callee.attribute;
+                    const obj = try self.evalExpr(att.value, env);
+
+                    // 1. list.append fast-path
+                    if (obj == .list and std.mem.eql(u8, att.attr, "append") and c.args.len == 1 and c.kwargs.len == 0) {
+                        const item = try self.evalExpr(c.args[0], env);
+                        try obj.list.items.append(self.allocator, item);
+                        return .none;
+                    }
+
+                    // 2. dict.get fast-path
+                    if (obj == .dict and std.mem.eql(u8, att.attr, "get") and (c.args.len == 1 or c.args.len == 2) and c.kwargs.len == 0) {
+                        const k = try self.evalExpr(c.args[0], env);
+                        const def_val = if (c.args.len == 2) try self.evalExpr(c.args[1], env) else Value.none;
+                        return obj.dict.get(k) orelse def_val;
+                    }
+
+                    // 3. Instance method direct dispatch
+                    if (obj == .instance) {
+                        if (obj.instance.class.lookup(att.attr)) |method| {
+                            if (c.args.len < 7 and c.kwargs.len == 0) {
+                                var m_args: [8]Value = undefined;
+                                m_args[0] = obj;
+                                for (c.args, 0..) |a, i| {
+                                    m_args[i + 1] = try self.evalExpr(a, env);
+                                }
+                                return self.callValue(method, m_args[0 .. c.args.len + 1], &[_]DictEntry{});
+                            }
+                        }
+                    }
+
+                    const callee = try self.evalAttribute(obj, att.attr);
+                    if (c.args.len < 8 and c.kwargs.len == 0) {
+                        var evaled_args: [8]Value = undefined;
+                        for (c.args, 0..) |a, i| {
+                            evaled_args[i] = try self.evalExpr(a, env);
+                        }
+                        return self.callValue(callee, evaled_args[0..c.args.len], &[_]DictEntry{});
+                    }
+                    var evaled_args = try self.allocator.alloc(Value, c.args.len);
+                    for (c.args, 0..) |a, i| {
+                        evaled_args[i] = try self.evalExpr(a, env);
+                    }
+                    var evaled_kwargs = try self.allocator.alloc(DictEntry, c.kwargs.len);
+                    for (c.kwargs, 0..) |kw, i| {
+                        const k_val = try Value.makeString(self.allocator, kw.name);
+                        const v_val = try self.evalExpr(kw.value, env);
+                        evaled_kwargs[i] = .{ .key = k_val, .val = v_val };
+                    }
+                    return self.callValue(callee, evaled_args, evaled_kwargs);
+                }
+
                 const callee = try self.evalExpr(c.callee, env);
+
+                // Small argument count fast-path (stack allocation, zero heap churn!)
+                if (c.args.len < 8 and c.kwargs.len == 0) {
+                    var evaled_args: [8]Value = undefined;
+                    for (c.args, 0..) |a, i| {
+                        evaled_args[i] = try self.evalExpr(a, env);
+                    }
+                    return self.callValue(callee, evaled_args[0..c.args.len], &[_]DictEntry{});
+                }
+
                 var evaled_args = try self.allocator.alloc(Value, c.args.len);
                 for (c.args, 0..) |a, i| {
                     evaled_args[i] = try self.evalExpr(a, env);
@@ -558,6 +871,7 @@ pub const Interpreter = struct {
                 const ret_stmt = try self.allocator.alloc(Stmt, 1);
                 ret_stmt[0] = Stmt{ .return_stmt = l.body };
 
+                env.markEscaped();
                 const fn_obj = try self.allocator.create(PyFunction);
                 fn_obj.* = .{
                     .name = "<lambda>",
@@ -574,10 +888,9 @@ pub const Interpreter = struct {
         }
     }
 
-    fn evalBinaryOp(self: *Interpreter, left: Value, op: BinaryOp, right: Value) !Value {
+    pub inline fn evalBinaryOp(self: *Interpreter, left: Value, op: BinaryOp, right: Value) !Value {
         switch (op) {
             .add => {
-                if (left == .int and right == .int) return Value.makeInt(left.int + right.int);
                 if (left == .float and right == .float) return Value.makeFloat(left.float + right.float);
                 if (left == .int and right == .float) return Value.makeFloat(@as(f64, @floatFromInt(left.int)) + right.float);
                 if (left == .float and right == .int) return Value.makeFloat(left.float + @as(f64, @floatFromInt(right.int)));
@@ -594,14 +907,12 @@ pub const Interpreter = struct {
                 return error.TypeError;
             },
             .sub => {
-                if (left == .int and right == .int) return Value.makeInt(left.int - right.int);
                 if (left == .float and right == .float) return Value.makeFloat(left.float - right.float);
                 if (left == .int and right == .float) return Value.makeFloat(@as(f64, @floatFromInt(left.int)) - right.float);
                 if (left == .float and right == .int) return Value.makeFloat(left.float - @as(f64, @floatFromInt(right.int)));
                 return error.TypeError;
             },
             .mul => {
-                if (left == .int and right == .int) return Value.makeInt(left.int * right.int);
                 if (left == .float and right == .float) return Value.makeFloat(left.float * right.float);
                 if (left == .int and right == .float) return Value.makeFloat(@as(f64, @floatFromInt(left.int)) * right.float);
                 if (left == .float and right == .int) return Value.makeFloat(left.float * @as(f64, @floatFromInt(right.int)));
@@ -629,63 +940,33 @@ pub const Interpreter = struct {
                 if (r_f == 0.0) return error.ZeroDivisionError;
                 return Value.makeFloat(l_f / r_f);
             },
-            .floor_div => {
-                if (left == .int and right == .int) {
-                    if (right.int == 0) return error.ZeroDivisionError;
-                    return Value.makeInt(@divFloor(left.int, right.int));
-                }
-                return error.TypeError;
-            },
-            .mod => {
-                if (left == .int and right == .int) {
-                    if (right.int == 0) return error.ZeroDivisionError;
-                    return Value.makeInt(@mod(left.int, right.int));
-                }
-                return error.TypeError;
-            },
+            .floor_div, .mod, .bit_and, .bit_or, .bit_xor, .lshift, .rshift => return error.TypeError,
             .pow => {
-                if (left == .int and right == .int and right.int >= 0) {
-                    return Value.makeInt(std.math.pow(i64, left.int, right.int));
-                }
                 const l_f = if (left == .float) left.float else @as(f64, @floatFromInt(left.int));
                 const r_f = if (right == .float) right.float else @as(f64, @floatFromInt(right.int));
                 return Value.makeFloat(std.math.pow(f64, l_f, r_f));
             },
-            .bit_and => {
-                if (left == .int and right == .int) return Value.makeInt(left.int & right.int);
-                return error.TypeError;
-            },
-            .bit_or => {
-                if (left == .int and right == .int) return Value.makeInt(left.int | right.int);
-                return error.TypeError;
-            },
-            .bit_xor => {
-                if (left == .int and right == .int) return Value.makeInt(left.int ^ right.int);
-                return error.TypeError;
-            },
-            .lshift => {
-                if (left == .int and right == .int and right.int >= 0) {
-                    const shift_amt: u6 = @intCast(right.int & 63);
-                    return Value.makeInt(left.int << shift_amt);
-                }
-                return error.TypeError;
-            },
-            .rshift => {
-                if (left == .int and right == .int and right.int >= 0) {
-                    const shift_amt: u6 = @intCast(right.int & 63);
-                    return Value.makeInt(left.int >> shift_amt);
-                }
-                return error.TypeError;
-            },
         }
     }
 
-    fn evalCompareOp(self: *Interpreter, left: Value, op: CompareOp, right: Value) bool {
+    pub inline fn evalCompareOp(self: *Interpreter, left: Value, op: CompareOp, right: Value) bool {
+        // Fast integer comparison (1 CPU instruction)
+        if (@as(std.meta.Tag(Value), left) == .int and @as(std.meta.Tag(Value), right) == .int) {
+            switch (op) {
+                .eq => return left.int == right.int,
+                .ne => return left.int != right.int,
+                .lt => return left.int < right.int,
+                .le => return left.int <= right.int,
+                .gt => return left.int > right.int,
+                .ge => return left.int >= right.int,
+                else => {},
+            }
+        }
+
         switch (op) {
             .eq => return left.equals(right),
             .ne => return !left.equals(right),
             .lt => {
-                if (left == .int and right == .int) return left.int < right.int;
                 if (left == .float and right == .float) return left.float < right.float;
                 if (left == .int and right == .float) return @as(f64, @floatFromInt(left.int)) < right.float;
                 if (left == .float and right == .int) return left.float < @as(f64, @floatFromInt(right.int));
@@ -693,7 +974,6 @@ pub const Interpreter = struct {
                 return false;
             },
             .le => {
-                if (left == .int and right == .int) return left.int <= right.int;
                 if (left == .float and right == .float) return left.float <= right.float;
                 if (left == .int and right == .float) return @as(f64, @floatFromInt(left.int)) <= right.float;
                 if (left == .float and right == .int) return left.float <= @as(f64, @floatFromInt(right.int));
@@ -701,7 +981,6 @@ pub const Interpreter = struct {
                 return false;
             },
             .gt => {
-                if (left == .int and right == .int) return left.int > right.int;
                 if (left == .float and right == .float) return left.float > right.float;
                 if (left == .int and right == .float) return @as(f64, @floatFromInt(left.int)) > right.float;
                 if (left == .float and right == .int) return left.float > @as(f64, @floatFromInt(right.int));
@@ -709,7 +988,6 @@ pub const Interpreter = struct {
                 return false;
             },
             .ge => {
-                if (left == .int and right == .int) return left.int >= right.int;
                 if (left == .float and right == .float) return left.float >= right.float;
                 if (left == .int and right == .float) return @as(f64, @floatFromInt(left.int)) >= right.float;
                 if (left == .float and right == .int) return left.float >= @as(f64, @floatFromInt(right.int));
@@ -1041,60 +1319,80 @@ pub const Interpreter = struct {
     pub fn callValue(self: *Interpreter, callee: Value, args: []const Value, kwargs: []const DictEntry) anyerror!Value {
         switch (callee) {
             .bound_method => |bm| {
-                var method_args = try self.allocator.alloc(Value, args.len + 1);
-                method_args[0] = bm.instance;
-                @memcpy(method_args[1..], args);
-                return self.callValue(bm.function, method_args, kwargs);
+                if (args.len < 7) {
+                    var method_buf: [8]Value = undefined;
+                    method_buf[0] = bm.instance;
+                    @memcpy(method_buf[1 .. args.len + 1], args);
+                    return self.callValue(bm.function, method_buf[0 .. args.len + 1], kwargs);
+                } else {
+                    var method_args = try self.allocator.alloc(Value, args.len + 1);
+                    method_args[0] = bm.instance;
+                    @memcpy(method_args[1..], args);
+                    return self.callValue(bm.function, method_args, kwargs);
+                }
             },
             .builtin => |b| {
                 return b.func(self.allocator, null, args, kwargs);
             },
             .function => |f| {
                 const parent_env: ?*Environment = if (f.closure_env) |ce| @ptrCast(@alignCast(ce)) else self.global_env;
-                const call_env = try Environment.init(self.allocator, parent_env);
+                // Acquire reusable environment from pool with ZERO heap allocation
+                const call_env = self.acquireEnv(parent_env);
+                defer self.releaseEnv(call_env);
 
-                // Bind parameters
-                var arg_idx: usize = 0;
-                for (f.param_names, 0..) |p_name, i| {
-                    if (f.vararg != null and std.mem.eql(u8, p_name, f.vararg.?)) {
-                        // Vararg *args collects remaining args into tuple
-                        const vararg_len = if (args.len > arg_idx) args.len - arg_idx else 0;
-                        const v_items = try self.allocator.alloc(Value, vararg_len);
-                        for (0..vararg_len) |vi| {
-                            v_items[vi] = args[arg_idx + vi];
-                        }
-                        const tup = try self.allocator.create(PyTuple);
-                        tup.* = .{ .items = v_items };
-                        try call_env.set(p_name, Value{ .tuple = tup });
-                        arg_idx = args.len;
-                    } else if (f.kwarg != null and std.mem.eql(u8, p_name, f.kwarg.?)) {
-                        const kw_dict = try PyDict.init(self.allocator);
-                        for (kwargs) |kw| {
-                            try kw_dict.put(self.allocator, kw.key, kw.val);
-                        }
-                        try call_env.set(p_name, Value{ .dict = kw_dict });
-                    } else {
-                        var bound = false;
-                        if (arg_idx < args.len) {
-                            try call_env.set(p_name, args[arg_idx]);
-                            arg_idx += 1;
-                            bound = true;
-                        } else {
-                            // Check kwargs
+                // Fast parameter binding for standard functions
+                if (f.vararg == null and f.kwarg == null and kwargs.len == 0 and f.param_names.len <= 8) {
+                    const bind_count = @min(args.len, f.param_names.len);
+                    var bi: usize = 0;
+                    while (bi < bind_count) : (bi += 1) {
+                        call_env.fast_slots[bi] = .{ .name = f.param_names[bi], .val = args[bi] };
+                    }
+                    while (bi < f.param_names.len) : (bi += 1) {
+                        call_env.fast_slots[bi] = .{ .name = f.param_names[bi], .val = if (bi < f.defaults.len) f.defaults[bi] else .none };
+                    }
+                    call_env.fast_count = @intCast(f.param_names.len);
+                } else {
+                    // Full parameter binding fallback
+                    var arg_idx: usize = 0;
+                    for (f.param_names, 0..) |p_name, i| {
+                        if (f.vararg != null and std.mem.eql(u8, p_name, f.vararg.?)) {
+                            const vararg_len = if (args.len > arg_idx) args.len - arg_idx else 0;
+                            const v_items = try self.allocator.alloc(Value, vararg_len);
+                            for (0..vararg_len) |vi| {
+                                v_items[vi] = args[arg_idx + vi];
+                            }
+                            const tup = try self.allocator.create(PyTuple);
+                            tup.* = .{ .items = v_items };
+                            try call_env.set(p_name, Value{ .tuple = tup });
+                            arg_idx = args.len;
+                        } else if (f.kwarg != null and std.mem.eql(u8, p_name, f.kwarg.?)) {
+                            const kw_dict = try PyDict.init(self.allocator);
                             for (kwargs) |kw| {
-                                if (kw.key == .string and std.mem.eql(u8, kw.key.string.bytes, p_name)) {
-                                    try call_env.set(p_name, kw.val);
-                                    bound = true;
-                                    break;
+                                try kw_dict.put(self.allocator, kw.key, kw.val);
+                            }
+                            try call_env.set(p_name, Value{ .dict = kw_dict });
+                        } else {
+                            var bound = false;
+                            if (arg_idx < args.len) {
+                                try call_env.set(p_name, args[arg_idx]);
+                                arg_idx += 1;
+                                bound = true;
+                            } else {
+                                for (kwargs) |kw| {
+                                    if (kw.key == .string and std.mem.eql(u8, kw.key.string.bytes, p_name)) {
+                                        try call_env.set(p_name, kw.val);
+                                        bound = true;
+                                        break;
+                                    }
                                 }
                             }
-                        }
 
-                        if (!bound) {
-                            if (f.defaults[i] != .none) {
-                                try call_env.set(p_name, f.defaults[i]);
-                            } else {
-                                try call_env.set(p_name, .none);
+                            if (!bound) {
+                                if (f.defaults[i] != .none) {
+                                    try call_env.set(p_name, f.defaults[i]);
+                                } else {
+                                    try call_env.set(p_name, .none);
+                                }
                             }
                         }
                     }
@@ -1103,7 +1401,7 @@ pub const Interpreter = struct {
                 const body_ptr: [*]const Stmt = @ptrCast(@alignCast(f.body_opaque));
                 const res = try self.evalSuite(body_ptr[0..f.body_len], call_env);
                 switch (res) {
-                    .return_flow => |rf| return rf.*,
+                    .return_flow => return self.return_value,
                     else => return .none,
                 }
             },
@@ -1112,10 +1410,17 @@ pub const Interpreter = struct {
                 const inst_val = Value{ .instance = instance };
 
                 if (cls.lookup("__init__")) |init_fn| {
-                    var init_args = try self.allocator.alloc(Value, args.len + 1);
-                    init_args[0] = inst_val;
-                    @memcpy(init_args[1..], args);
-                    _ = try self.callValue(init_fn, init_args, kwargs);
+                    if (args.len < 7) {
+                        var init_buf: [8]Value = undefined;
+                        init_buf[0] = inst_val;
+                        @memcpy(init_buf[1 .. args.len + 1], args);
+                        _ = try self.callValue(init_fn, init_buf[0 .. args.len + 1], kwargs);
+                    } else {
+                        var init_args = try self.allocator.alloc(Value, args.len + 1);
+                        init_args[0] = inst_val;
+                        @memcpy(init_args[1..], args);
+                        _ = try self.callValue(init_fn, init_args, kwargs);
+                    }
                 }
 
                 return inst_val;

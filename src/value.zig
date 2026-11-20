@@ -26,6 +26,11 @@ pub const DictEntry = struct {
     val: Value,
 };
 
+pub const FieldSlot = struct {
+    name: []const u8,
+    val: Value,
+};
+
 pub const PyString = struct {
     bytes: []const u8,
 };
@@ -179,21 +184,51 @@ pub const PyClass = struct {
 
 pub const PyInstance = struct {
     class: *PyClass,
-    attributes: std.StringHashMap(Value),
+    inline_slots: [8]FieldSlot = undefined,
+    inline_count: u8 = 0,
+    attributes: ?std.StringHashMap(Value) = null,
 
     pub fn init(allocator: Allocator, class: *PyClass) !*PyInstance {
         const self = try allocator.create(PyInstance);
         self.* = .{
             .class = class,
-            .attributes = std.StringHashMap(Value).init(allocator),
+            .inline_count = 0,
+            .attributes = null,
         };
         return self;
     }
 
+    pub fn setAttr(self: *PyInstance, allocator: Allocator, name: []const u8, val: Value) !void {
+        var i: u8 = 0;
+        while (i < self.inline_count) : (i += 1) {
+            if (self.inline_slots[i].name.ptr == name.ptr or std.mem.eql(u8, self.inline_slots[i].name, name)) {
+                self.inline_slots[i].val = val;
+                return;
+            }
+        }
+        if (self.inline_count < 8) {
+            self.inline_slots[self.inline_count] = .{ .name = name, .val = val };
+            self.inline_count += 1;
+            return;
+        }
+        if (self.attributes == null) {
+            self.attributes = std.StringHashMap(Value).init(allocator);
+        }
+        try self.attributes.?.put(name, val);
+    }
+
     pub fn getAttr(self: *PyInstance, allocator: Allocator, name: []const u8) ?Value {
-        if (self.attributes.get(name)) |v| return v;
+        var i: u8 = 0;
+        while (i < self.inline_count) : (i += 1) {
+            if (self.inline_slots[i].name.ptr == name.ptr or std.mem.eql(u8, self.inline_slots[i].name, name)) {
+                return self.inline_slots[i].val;
+            }
+        }
+        if (self.attributes) |*attrs| {
+            if (attrs.get(name)) |v| return v;
+        }
         if (self.class.lookup(name)) |v| {
-            if (v == .function) {
+            if (v == .function or v == .builtin) {
                 const bm = allocator.create(PyBoundMethod) catch return v;
                 bm.* = .{
                     .instance = .{ .instance = self },
@@ -243,7 +278,7 @@ pub const Value = union(enum) {
     instance: *PyInstance,
     bound_method: *PyBoundMethod,
     module: *PyModule,
-    return_flow: *Value,
+    return_flow,
     break_flow,
     continue_flow,
 
@@ -282,8 +317,7 @@ pub const Value = union(enum) {
             .set => |s| s.items.items.len > 0,
             .range => |r| r.length() > 0,
             .function, .builtin, .class, .instance, .bound_method, .module => true,
-            .return_flow => |rf| rf.isTruthy(),
-            .break_flow, .continue_flow => false,
+            .return_flow, .break_flow, .continue_flow => false,
         };
     }
 
@@ -305,7 +339,7 @@ pub const Value = union(enum) {
             .instance => |ins| ins.class.name,
             .bound_method => "method",
             .module => "module",
-            .return_flow => |rf| rf.typeName(),
+            .return_flow => "return",
             .break_flow => "break",
             .continue_flow => "continue",
         };
@@ -457,7 +491,7 @@ pub const Value = union(enum) {
             .instance => |ins| return std.fmt.allocPrint(allocator, "<{s} object>", .{ins.class.name}),
             .bound_method => return "<bound method>",
             .module => |m| return std.fmt.allocPrint(allocator, "<module '{s}'>", .{m.name}),
-            .return_flow => |rf| return rf.str(allocator),
+            .return_flow => return "return",
             .break_flow => return "break",
             .continue_flow => return "continue",
         }

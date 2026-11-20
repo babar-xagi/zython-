@@ -54,9 +54,15 @@ pub const SliceExpr = struct {
     is_index: bool,
 };
 
+pub const IdentExpr = struct {
+    name: []const u8,
+    slot_idx: u8 = 255,
+    cached_val: ?Value = null,
+};
+
 pub const Expr = union(enum) {
     literal: Value,
-    identifier: []const u8,
+    identifier: IdentExpr,
     binary: struct { left: *Expr, op: BinaryOp, right: *Expr },
     unary: struct { op: UnaryOp, expr: *Expr },
     compare: struct { left: *Expr, ops: []CompareOp, rights: []*Expr },

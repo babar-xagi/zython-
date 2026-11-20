@@ -889,7 +889,7 @@ pub const Parser = struct {
             return node;
         }
         if (try self.match(.identifier)) {
-            node.* = .{ .identifier = self.previous.lexeme };
+            node.* = .{ .identifier = .{ .name = self.previous.lexeme } };
             return node;
         }
 
