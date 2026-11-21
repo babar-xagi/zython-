@@ -38,6 +38,7 @@ pub const TokenType = enum {
     int_lit,
     float_lit,
     string_lit,
+    fstring_lit,
     identifier,
 
     // Operators

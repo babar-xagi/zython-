@@ -6,17 +6,17 @@ This document provides an exhaustive, root-cause analysis of all functional bugs
 
 ## 📑 Summary of Issues
 
-| ID | Issue Description | Severity | Affected Component | Impact |
-|:---:|---|:---:|---|---|
-| **BUG-01** | Variable freezing beyond 8 fast slots | 🔴 **Critical** | `src/interpreter.zig:622` | Stale variable values inside loops |
-| **BUG-02** | Attribute `+=` and `-=` crashes (`TypeError`) | 🔴 **Critical** | `src/interpreter.zig:909` | Cannot mutate object attributes with `+=` / `-=` |
-| **BUG-03** | Set `in` operator always returns `False` | 🟠 **Major** | `src/interpreter.zig:997` | Set membership checks fail silently |
-| **BUG-04** | Set iteration throws `TypeError` | 🟠 **Major** | `src/interpreter.zig:381` | Cannot loop over sets (`for x in my_set:`) |
-| **BUG-05** | F-strings lack expression interpolation | 🟡 **Medium** | `src/lexer.zig:231` | `f"{x}"` prints raw literal `{x}` |
-| **BUG-06** | Slicing completely ignores `step` parameter | 🟡 **Medium** | `src/interpreter.zig:1284`| `arr[::2]` and `arr[::-1]` return full copy |
-| **BUG-07** | Exception type matching is bypassed | 🟡 **Medium** | `src/interpreter.zig:473`| First `except` handler always catches |
-| **BUG-08** | Bare tuple assignment requires parentheses | 🔵 **Minor** | `src/parser.zig:586` | `a, b = b, a` fails with `ParseError` |
-| **BUG-09** | 64-bit integer overflow wrapping | 🔵 **Minor** | `src/interpreter.zig:650` | `2**64` wraps to 0 instead of bignum |
+| ID | Issue Description | Severity | Affected Component | Status |
+|:---:|---|:---:|---|:---:|
+| **BUG-01** | Variable freezing beyond 8 fast slots | 🔴 **Critical** | `src/interpreter.zig:622` | ✅ **RESOLVED & VERIFIED** |
+| **BUG-02** | Attribute `+=` and `-=` crashes (`TypeError`) | 🔴 **Critical** | `src/interpreter.zig:909` | ✅ **RESOLVED & VERIFIED** |
+| **BUG-03** | Set `in` operator always returns `False` | 🟠 **Major** | `src/interpreter.zig:997` | ✅ **RESOLVED & VERIFIED** |
+| **BUG-04** | Set iteration throws `TypeError` | 🟠 **Major** | `src/interpreter.zig:381` | ✅ **RESOLVED & VERIFIED** |
+| **BUG-05** | F-strings lack expression interpolation | 🟡 **Medium** | `src/lexer.zig:231` | ✅ **RESOLVED & VERIFIED** |
+| **BUG-06** | Slicing completely ignores `step` parameter | 🟡 **Medium** | `src/interpreter.zig:1284`| ✅ **RESOLVED & VERIFIED** |
+| **BUG-07** | Exception type matching is bypassed | 🟡 **Medium** | `src/interpreter.zig:473`| ✅ **RESOLVED & VERIFIED** |
+| **BUG-08** | Bare tuple assignment requires parentheses | 🔵 **Minor** | `src/parser.zig:586` | ✅ **RESOLVED & VERIFIED** |
+| **BUG-09** | 64-bit integer overflow wrapping | 🔵 **Minor** | `src/interpreter.zig:650` | ℹ️ **Documented Architectural Tradeoff** |
 
 ---
 

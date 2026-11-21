@@ -54,6 +54,17 @@ pub const SliceExpr = struct {
     is_index: bool,
 };
 
+pub const ListComp = struct {
+    elt: *Expr,
+    target: *Expr,
+    iter: *Expr,
+    condition: ?*Expr,
+};
+
+pub const FString = struct {
+    parts: []*Expr,
+};
+
 pub const IdentExpr = struct {
     name: []const u8,
     slot_idx: u8 = 255,
@@ -68,7 +79,13 @@ pub const Expr = union(enum) {
     compare: struct { left: *Expr, ops: []CompareOp, rights: []*Expr },
     bool_op: struct { op: BoolOp, values: []*Expr },
     call: struct { callee: *Expr, args: []*Expr, kwargs: []Kwarg },
-    attribute: struct { value: *Expr, attr: []const u8 },
+    attribute: struct {
+        value: *Expr,
+        attr: []const u8,
+        cached_class: ?*anyopaque = null,
+        cached_method: ?Value = null,
+        cached_slot: u8 = 255,
+    },
     subscript: struct { value: *Expr, slice: *SliceExpr },
     list_expr: []*Expr,
     tuple_expr: []*Expr,
@@ -76,6 +93,8 @@ pub const Expr = union(enum) {
     set_expr: []*Expr,
     ternary: struct { if_val: *Expr, condition: *Expr, else_val: *Expr },
     lambda: struct { params: [][]const u8, body: *Expr },
+    list_comp: ListComp,
+    f_string: FString,
 };
 
 pub const Param = struct {

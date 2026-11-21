@@ -468,9 +468,11 @@ pub const Lexer = struct {
     }
 
     fn scanString(self: *Lexer, start_pos: usize, start_line: usize, start_col: usize) !Token {
+        var is_fstring = false;
         // Skip prefix (e.g. r, f, b)
         var p = start_pos;
         while (p < self.cursor and (self.source[p] != '"' and self.source[p] != '\'')) {
+            if (self.source[p] == 'f' or self.source[p] == 'F') is_fstring = true;
             p += 1;
         }
         if (p >= self.cursor) {
@@ -537,7 +539,7 @@ pub const Lexer = struct {
         }
 
         return Token{
-            .tag = .string_lit,
+            .tag = if (is_fstring) .fstring_lit else .string_lit,
             .lexeme = unescaped_buf.items,
             .line = start_line,
             .column = start_col,

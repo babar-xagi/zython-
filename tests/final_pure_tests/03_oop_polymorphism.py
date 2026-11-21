@@ -46,7 +46,7 @@ class Character(Entity):
         return "Character"
 
     def take_damage(self, dmg):
-        self.hp = self.hp - dmg
+        self.hp -= dmg
         return self.hp
 
 class Player(Character):
@@ -62,7 +62,7 @@ class Player(Character):
 
     def cast_spell(self, cost):
         if self.mana >= cost:
-            self.mana = self.mana - cost
+            self.mana -= cost
             return True
         return False
 

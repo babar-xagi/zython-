@@ -431,7 +431,19 @@ pub const Parser = struct {
     }
 
     fn parseSimpleStmt(self: *Parser) !Stmt {
-        const first = try self.parseExpr();
+        var first = try self.parseExpr();
+        if (try self.match(.comma)) {
+            var items: std.ArrayList(*Expr) = .empty;
+            try items.append(self.allocator, first);
+            while (true) {
+                const next_item = try self.parseExpr();
+                try items.append(self.allocator, next_item);
+                if (!try self.match(.comma)) break;
+            }
+            const tup_node = try self.allocator.create(Expr);
+            tup_node.* = .{ .tuple_expr = items.items };
+            first = tup_node;
+        }
 
         // Check for aug_assign
         const aug_op: ?BinaryOp = if (try self.match(.plus_equal))
@@ -478,9 +490,34 @@ pub const Parser = struct {
             try targets.append(self.allocator, first);
 
             var next_expr = try self.parseExpr();
+            if (try self.match(.comma)) {
+                var items: std.ArrayList(*Expr) = .empty;
+                try items.append(self.allocator, next_expr);
+                while (true) {
+                    const next_item = try self.parseExpr();
+                    try items.append(self.allocator, next_item);
+                    if (!try self.match(.comma)) break;
+                }
+                const tup_node = try self.allocator.create(Expr);
+                tup_node.* = .{ .tuple_expr = items.items };
+                next_expr = tup_node;
+            }
+
             while (try self.match(.equal)) {
                 try targets.append(self.allocator, next_expr);
                 next_expr = try self.parseExpr();
+                if (try self.match(.comma)) {
+                    var items: std.ArrayList(*Expr) = .empty;
+                    try items.append(self.allocator, next_expr);
+                    while (true) {
+                        const next_item = try self.parseExpr();
+                        try items.append(self.allocator, next_item);
+                        if (!try self.match(.comma)) break;
+                    }
+                    const tup_node = try self.allocator.create(Expr);
+                    tup_node.* = .{ .tuple_expr = items.items };
+                    next_expr = tup_node;
+                }
             }
 
             return Stmt{
@@ -888,6 +925,52 @@ pub const Parser = struct {
             node.* = .{ .literal = s };
             return node;
         }
+        if (try self.match(.fstring_lit)) {
+            const lex = self.previous.lexeme;
+            var parts: std.ArrayList(*Expr) = .empty;
+            var i: usize = 0;
+            var literal_start: usize = 0;
+            while (i < lex.len) {
+                if (lex[i] == '{') {
+                    if (i > literal_start) {
+                        const lit_str = lex[literal_start..i];
+                        const lit_node = try self.allocator.create(Expr);
+                        const val = try Value.makeString(self.allocator, lit_str);
+                        lit_node.* = .{ .literal = val };
+                        try parts.append(self.allocator, lit_node);
+                    }
+                    i += 1;
+                    const expr_start = i;
+                    var depth: usize = 1;
+                    while (i < lex.len and depth > 0) : (i += 1) {
+                        if (lex[i] == '{') depth += 1;
+                        if (lex[i] == '}') {
+                            depth -= 1;
+                            if (depth == 0) break;
+                        }
+                    }
+                    const expr_str = lex[expr_start..i];
+                    if (i < lex.len and lex[i] == '}') i += 1;
+                    literal_start = i;
+
+                    var sub_parser = try Parser.init(self.allocator, expr_str);
+                    defer sub_parser.deinit();
+                    const parsed_expr = try sub_parser.parseExpr();
+                    try parts.append(self.allocator, parsed_expr);
+                } else {
+                    i += 1;
+                }
+            }
+            if (literal_start < lex.len) {
+                const lit_str = lex[literal_start..lex.len];
+                const lit_node = try self.allocator.create(Expr);
+                const val = try Value.makeString(self.allocator, lit_str);
+                lit_node.* = .{ .literal = val };
+                try parts.append(self.allocator, lit_node);
+            }
+            node.* = .{ .f_string = .{ .parts = parts.items } };
+            return node;
+        }
         if (try self.match(.identifier)) {
             node.* = .{ .identifier = .{ .name = self.previous.lexeme } };
             return node;
@@ -920,15 +1003,41 @@ pub const Parser = struct {
             return expr;
         }
 
-        // List literal [a, b, c]
+        // List literal [a, b, c] or list comprehension [x for x in r]
         if (try self.match(.lbracket)) {
+            if (try self.match(.rbracket)) {
+                node.* = .{ .list_expr = &[_]*Expr{} };
+                return node;
+            }
+
+            const first_item = try self.parseExpr();
+            if (try self.match(.kw_for)) {
+                const target = try self.parseForTarget();
+                _ = try self.consume(.kw_in, "Expected 'in' in list comprehension");
+                const iter = try self.parseOr();
+                var cond: ?*Expr = null;
+                if (try self.match(.kw_if)) {
+                    cond = try self.parseExpr();
+                }
+                _ = try self.consume(.rbracket, "Expected ']' after list comprehension");
+                node.* = .{
+                    .list_comp = .{
+                        .elt = first_item,
+                        .target = target,
+                        .iter = iter,
+                        .condition = cond,
+                    },
+                };
+                return node;
+            }
+
             var items: std.ArrayList(*Expr) = .empty;
-            if (!self.check(.rbracket)) {
-                while (true) {
+            try items.append(self.allocator, first_item);
+            if (try self.match(.comma)) {
+                while (!self.check(.rbracket)) {
                     const item = try self.parseExpr();
                     try items.append(self.allocator, item);
                     if (!try self.match(.comma)) break;
-                    if (self.check(.rbracket)) break;
                 }
             }
             _ = try self.consume(.rbracket, "Expected ']' after list literal");

@@ -149,12 +149,134 @@ pub const Interpreter = struct {
                                     slot.*.int *= rhs.int;
                                     return .none;
                                 },
+                                .floor_div => {
+                                    if (rhs.int == 0) return error.ZeroDivisionError;
+                                    slot.*.int = @divFloor(slot.*.int, rhs.int);
+                                    return .none;
+                                },
+                                .mod => {
+                                    if (rhs.int == 0) return error.ZeroDivisionError;
+                                    slot.*.int = @mod(slot.*.int, rhs.int);
+                                    return .none;
+                                },
+                                .bit_and => {
+                                    slot.*.int &= rhs.int;
+                                    return .none;
+                                },
+                                .bit_or => {
+                                    slot.*.int |= rhs.int;
+                                    return .none;
+                                },
+                                .bit_xor => {
+                                    slot.*.int ^= rhs.int;
+                                    return .none;
+                                },
+                                .lshift => {
+                                    if (rhs.int >= 0) {
+                                        slot.*.int <<= @intCast(rhs.int & 63);
+                                        return .none;
+                                    }
+                                    return error.TypeError;
+                                },
+                                .rshift => {
+                                    if (rhs.int >= 0) {
+                                        slot.*.int >>= @intCast(rhs.int & 63);
+                                        return .none;
+                                    }
+                                    return error.TypeError;
+                                },
                                 else => {},
                             }
                         }
                         slot.* = try self.evalBinaryOp(slot.*, aa.op, rhs);
                         return .none;
                     }
+                } else if (aa.target.* == .attribute) {
+                    const att = &aa.target.attribute;
+                    const obj = try self.evalExpr(att.value, env);
+                    if (obj == .instance) {
+                        const ins = obj.instance;
+                        var slot_ptr: ?*Value = null;
+                        if (att.cached_slot < ins.inline_count) {
+                            const s = &ins.inline_slots[att.cached_slot];
+                            if (s.name.ptr == att.attr.ptr or std.mem.eql(u8, s.name, att.attr)) {
+                                slot_ptr = &s.val;
+                            }
+                        }
+                        if (slot_ptr == null) {
+                            var i: u8 = 0;
+                            while (i < ins.inline_count) : (i += 1) {
+                                if (ins.inline_slots[i].name.ptr == att.attr.ptr or std.mem.eql(u8, ins.inline_slots[i].name, att.attr)) {
+                                    att.cached_slot = i;
+                                    slot_ptr = &ins.inline_slots[i].val;
+                                    break;
+                                }
+                            }
+                        }
+                        if (slot_ptr) |slot| {
+                            const rhs = try self.evalExpr(aa.value, env);
+                            if (slot.* == .int and rhs == .int) {
+                                switch (aa.op) {
+                                    .add => {
+                                        slot.*.int += rhs.int;
+                                        return .none;
+                                    },
+                                    .sub => {
+                                        slot.*.int -= rhs.int;
+                                        return .none;
+                                    },
+                                    .mul => {
+                                        slot.*.int *= rhs.int;
+                                        return .none;
+                                    },
+                                    .floor_div => {
+                                        if (rhs.int == 0) return error.ZeroDivisionError;
+                                        slot.*.int = @divFloor(slot.*.int, rhs.int);
+                                        return .none;
+                                    },
+                                    .mod => {
+                                        if (rhs.int == 0) return error.ZeroDivisionError;
+                                        slot.*.int = @mod(slot.*.int, rhs.int);
+                                        return .none;
+                                    },
+                                    .bit_and => {
+                                        slot.*.int &= rhs.int;
+                                        return .none;
+                                    },
+                                    .bit_or => {
+                                        slot.*.int |= rhs.int;
+                                        return .none;
+                                    },
+                                    .bit_xor => {
+                                        slot.*.int ^= rhs.int;
+                                        return .none;
+                                    },
+                                    .lshift => {
+                                        if (rhs.int >= 0) {
+                                            slot.*.int <<= @intCast(rhs.int & 63);
+                                            return .none;
+                                        }
+                                        return error.TypeError;
+                                    },
+                                    .rshift => {
+                                        if (rhs.int >= 0) {
+                                            slot.*.int >>= @intCast(rhs.int & 63);
+                                            return .none;
+                                        }
+                                        return error.TypeError;
+                                    },
+                                    else => {},
+                                }
+                            }
+                            slot.* = try self.evalBinaryOp(slot.*, aa.op, rhs);
+                            return .none;
+                        }
+                    }
+                    const rhs = try self.evalExpr(aa.value, env);
+                    const cur = try self.evalExpr(aa.target, env);
+                    const updated = try self.evalBinaryOp(cur, aa.op, rhs);
+                    try self.assignTarget(aa.target, updated, env);
+                    return .none;
                 }
                 const rhs = try self.evalExpr(aa.value, env);
                 const cur = try self.evalExpr(aa.target, env);
@@ -299,7 +421,7 @@ pub const Interpreter = struct {
                         while (idx < len) : (idx += 1) {
                             const val_int = r.start + @as(i64, @intCast(idx)) * r.step;
                             if (cached_slot) |slot| {
-                                slot.*.int = val_int;
+                                slot.* = Value.makeInt(val_int);
                             } else {
                                 try self.assignTarget(f.target, Value.makeInt(val_int), env);
                             }
@@ -316,8 +438,18 @@ pub const Interpreter = struct {
                         }
                     },
                     .list => |l| {
+                        const target_ident: ?[]const u8 = if (f.target.* == .identifier) f.target.identifier.name else null;
+                        var cached_slot: ?*Value = if (target_ident) |ti| env.getSlotPtr(ti) else null;
+                        if (cached_slot == null and target_ident != null) {
+                            try env.set(target_ident.?, .none);
+                            cached_slot = env.getSlotPtr(target_ident.?);
+                        }
                         for (l.items.items) |it| {
-                            try self.assignTarget(f.target, it, env);
+                            if (cached_slot) |slot| {
+                                slot.* = it;
+                            } else {
+                                try self.assignTarget(f.target, it, env);
+                            }
                             const res = try self.evalSuite(f.body, env);
                             switch (res) {
                                 .break_flow => {
@@ -331,8 +463,43 @@ pub const Interpreter = struct {
                         }
                     },
                     .tuple => |t| {
+                        const target_ident: ?[]const u8 = if (f.target.* == .identifier) f.target.identifier.name else null;
+                        var cached_slot: ?*Value = if (target_ident) |ti| env.getSlotPtr(ti) else null;
+                        if (cached_slot == null and target_ident != null) {
+                            try env.set(target_ident.?, .none);
+                            cached_slot = env.getSlotPtr(target_ident.?);
+                        }
                         for (t.items) |it| {
-                            try self.assignTarget(f.target, it, env);
+                            if (cached_slot) |slot| {
+                                slot.* = it;
+                            } else {
+                                try self.assignTarget(f.target, it, env);
+                            }
+                            const res = try self.evalSuite(f.body, env);
+                            switch (res) {
+                                .break_flow => {
+                                    broke = true;
+                                    break;
+                                },
+                                .continue_flow => continue,
+                                .return_flow => return res,
+                                else => {},
+                            }
+                        }
+                    },
+                    .set => |s| {
+                        const target_ident: ?[]const u8 = if (f.target.* == .identifier) f.target.identifier.name else null;
+                        var cached_slot: ?*Value = if (target_ident) |ti| env.getSlotPtr(ti) else null;
+                        if (cached_slot == null and target_ident != null) {
+                            try env.set(target_ident.?, .none);
+                            cached_slot = env.getSlotPtr(target_ident.?);
+                        }
+                        for (s.items.items) |it| {
+                            if (cached_slot) |slot| {
+                                slot.* = it;
+                            } else {
+                                try self.assignTarget(f.target, it, env);
+                            }
                             const res = try self.evalSuite(f.body, env);
                             switch (res) {
                                 .break_flow => {
@@ -464,23 +631,50 @@ pub const Interpreter = struct {
             },
             .try_stmt => |t| {
                 var exc_raised = false;
-                _ = self.evalSuite(t.body, env) catch {
+                var exc_err: anyerror = undefined;
+                _ = self.evalSuite(t.body, env) catch |err| {
                     exc_raised = true;
+                    exc_err = err;
                 };
 
                 var result: Value = .none;
 
                 if (exc_raised and t.handlers.len > 0) {
+                    var handled = false;
                     for (t.handlers) |h| {
-                        if (h.name) |name| {
-                            const exc_str = try Value.makeString(self.allocator, "Exception");
-                            try env.set(name, exc_str);
+                        var matches = false;
+                        if (h.exc_type) |et| {
+                            const err_name = @errorName(exc_err);
+                            if (et.* == .identifier) {
+                                const type_name = et.identifier.name;
+                                if (std.mem.eql(u8, type_name, "Exception") or
+                                    std.mem.eql(u8, type_name, "BaseException") or
+                                    std.mem.eql(u8, type_name, err_name))
+                                {
+                                    matches = true;
+                                }
+                            } else {
+                                matches = true;
+                            }
+                        } else {
+                            matches = true;
                         }
-                        result = try self.evalSuite(h.body, env);
-                        break;
+
+                        if (matches) {
+                            if (h.name) |name| {
+                                const exc_str = try Value.makeString(self.allocator, @errorName(exc_err));
+                                try env.set(name, exc_str);
+                            }
+                            result = try self.evalSuite(h.body, env);
+                            handled = true;
+                            break;
+                        }
                     }
+                    if (!handled) return exc_err;
                 } else if (!exc_raised and t.else_branch != null) {
                     result = try self.evalSuite(t.else_branch.?, env);
+                } else if (exc_raised and t.handlers.len == 0) {
+                    return exc_err;
                 }
 
                 if (t.finally_branch) |fb| {
@@ -555,10 +749,26 @@ pub const Interpreter = struct {
                 }
                 try env.set(id.name, val);
             },
-            .attribute => |att| {
+            .attribute => |*att| {
                 const obj = try self.evalExpr(att.value, env);
                 if (obj == .instance) {
-                    try obj.instance.setAttr(self.allocator, att.attr, val);
+                    const ins = obj.instance;
+                    if (att.cached_slot < ins.inline_count) {
+                        const s = &ins.inline_slots[att.cached_slot];
+                        if (s.name.ptr == att.attr.ptr or std.mem.eql(u8, s.name, att.attr)) {
+                            s.val = val;
+                            return;
+                        }
+                    }
+                    var i: u8 = 0;
+                    while (i < ins.inline_count) : (i += 1) {
+                        if (ins.inline_slots[i].name.ptr == att.attr.ptr or std.mem.eql(u8, ins.inline_slots[i].name, att.attr)) {
+                            att.cached_slot = i;
+                            ins.inline_slots[i].val = val;
+                            return;
+                        }
+                    }
+                    try ins.setAttr(self.allocator, att.attr, val);
                 } else if (obj == .module) {
                     try obj.module.attributes.put(att.attr, val);
                 } else {
@@ -620,7 +830,7 @@ pub const Interpreter = struct {
                     }
                 }
                 if (env.get(id.name)) |v| {
-                    if (env.parent != null) {
+                    if (self.builtins_env.get(id.name) != null) {
                         id.cached_val = v;
                     }
                     return v;
@@ -737,7 +947,7 @@ pub const Interpreter = struct {
             .call => |c| {
                 // Method call fast-path (bypasses PyBoundMethod heap allocation)
                 if (c.callee.* == .attribute) {
-                    const att = c.callee.attribute;
+                    const att = &c.callee.attribute;
                     const obj = try self.evalExpr(att.value, env);
 
                     // 1. list.append fast-path
@@ -747,16 +957,35 @@ pub const Interpreter = struct {
                         return .none;
                     }
 
-                    // 2. dict.get fast-path
+                    // 2. set.add fast-path
+                    if (obj == .set and std.mem.eql(u8, att.attr, "add") and c.args.len == 1 and c.kwargs.len == 0) {
+                        const item = try self.evalExpr(c.args[0], env);
+                        try obj.set.add(self.allocator, item);
+                        return .none;
+                    }
+
+                    // 3. dict.get fast-path
                     if (obj == .dict and std.mem.eql(u8, att.attr, "get") and (c.args.len == 1 or c.args.len == 2) and c.kwargs.len == 0) {
                         const k = try self.evalExpr(c.args[0], env);
                         const def_val = if (c.args.len == 2) try self.evalExpr(c.args[1], env) else Value.none;
                         return obj.dict.get(k) orelse def_val;
                     }
 
-                    // 3. Instance method direct dispatch
+                    // 4. Instance method direct dispatch with monomorphic inline cache
                     if (obj == .instance) {
-                        if (obj.instance.class.lookup(att.attr)) |method| {
+                        const ins = obj.instance;
+                        var method_opt: ?Value = null;
+                        if (att.cached_class != null and att.cached_class.? == @as(*anyopaque, @ptrCast(ins.class))) {
+                            method_opt = att.cached_method;
+                        } else {
+                            if (ins.class.lookup(att.attr)) |m| {
+                                att.cached_class = @ptrCast(ins.class);
+                                att.cached_method = m;
+                                method_opt = m;
+                            }
+                        }
+
+                        if (method_opt) |method| {
                             if (c.args.len < 7 and c.kwargs.len == 0) {
                                 var m_args: [8]Value = undefined;
                                 m_args[0] = obj;
@@ -814,8 +1043,24 @@ pub const Interpreter = struct {
 
                 return self.callValue(callee, evaled_args, evaled_kwargs);
             },
-            .attribute => |att| {
+            .attribute => |*att| {
                 const val = try self.evalExpr(att.value, env);
+                if (val == .instance) {
+                    const ins = val.instance;
+                    if (att.cached_slot < ins.inline_count) {
+                        const s = &ins.inline_slots[att.cached_slot];
+                        if (s.name.ptr == att.attr.ptr or std.mem.eql(u8, s.name, att.attr)) {
+                            return s.val;
+                        }
+                    }
+                    var i: u8 = 0;
+                    while (i < ins.inline_count) : (i += 1) {
+                        if (ins.inline_slots[i].name.ptr == att.attr.ptr or std.mem.eql(u8, ins.inline_slots[i].name, att.attr)) {
+                            att.cached_slot = i;
+                            return ins.inline_slots[i].val;
+                        }
+                    }
+                }
                 return self.evalAttribute(val, att.attr);
             },
             .subscript => |sub| {
@@ -885,10 +1130,116 @@ pub const Interpreter = struct {
                 };
                 return Value{ .function = fn_obj };
             },
+            .list_comp => |lc| {
+                const new_list = try PyList.init(self.allocator);
+                const iter_val = try self.evalExpr(lc.iter, env);
+                switch (iter_val) {
+                    .range => |r| {
+                        const len = r.length();
+                        var idx: usize = 0;
+                        while (idx < len) : (idx += 1) {
+                            const val_int = r.start + @as(i64, @intCast(idx)) * r.step;
+                            try self.assignTarget(lc.target, Value.makeInt(val_int), env);
+                            var include = true;
+                            if (lc.condition) |cond| {
+                                const cv = try self.evalExpr(cond, env);
+                                include = cv.isTruthy();
+                            }
+                            if (include) {
+                                const elt_val = try self.evalExpr(lc.elt, env);
+                                try new_list.items.append(self.allocator, elt_val);
+                            }
+                        }
+                    },
+                    .list => |l| {
+                        for (l.items.items) |it| {
+                            try self.assignTarget(lc.target, it, env);
+                            var include = true;
+                            if (lc.condition) |cond| {
+                                const cv = try self.evalExpr(cond, env);
+                                include = cv.isTruthy();
+                            }
+                            if (include) {
+                                const elt_val = try self.evalExpr(lc.elt, env);
+                                try new_list.items.append(self.allocator, elt_val);
+                            }
+                        }
+                    },
+                    .tuple => |t| {
+                        for (t.items) |it| {
+                            try self.assignTarget(lc.target, it, env);
+                            var include = true;
+                            if (lc.condition) |cond| {
+                                const cv = try self.evalExpr(cond, env);
+                                include = cv.isTruthy();
+                            }
+                            if (include) {
+                                const elt_val = try self.evalExpr(lc.elt, env);
+                                try new_list.items.append(self.allocator, elt_val);
+                            }
+                        }
+                    },
+                    else => return error.TypeError,
+                }
+                return Value{ .list = new_list };
+            },
+            .f_string => |fs| {
+                var buf: std.ArrayList(u8) = .empty;
+                for (fs.parts) |p| {
+                    const v = try self.evalExpr(p, env);
+                    const s = try v.str(self.allocator);
+                    try buf.appendSlice(self.allocator, s);
+                }
+                return Value.makeString(self.allocator, buf.items);
+            },
         }
     }
 
     pub inline fn evalBinaryOp(self: *Interpreter, left: Value, op: BinaryOp, right: Value) !Value {
+        if (left == .int and right == .int) {
+            switch (op) {
+                .add => return Value.makeInt(left.int + right.int),
+                .sub => return Value.makeInt(left.int - right.int),
+                .mul => return Value.makeInt(left.int * right.int),
+                .floor_div => {
+                    if (right.int == 0) return error.ZeroDivisionError;
+                    return Value.makeInt(@divFloor(left.int, right.int));
+                },
+                .mod => {
+                    if (right.int == 0) return error.ZeroDivisionError;
+                    return Value.makeInt(@mod(left.int, right.int));
+                },
+                .bit_and => return Value.makeInt(left.int & right.int),
+                .bit_or => return Value.makeInt(left.int | right.int),
+                .bit_xor => return Value.makeInt(left.int ^ right.int),
+                .lshift => {
+                    if (right.int >= 0) {
+                        const shift_amt: u6 = @intCast(right.int & 63);
+                        return Value.makeInt(left.int << shift_amt);
+                    }
+                    return error.TypeError;
+                },
+                .rshift => {
+                    if (right.int >= 0) {
+                        const shift_amt: u6 = @intCast(right.int & 63);
+                        return Value.makeInt(left.int >> shift_amt);
+                    }
+                    return error.TypeError;
+                },
+                .pow => {
+                    if (right.int >= 0) {
+                        return Value.makeInt(std.math.pow(i64, left.int, right.int));
+                    } else {
+                        return Value.makeFloat(std.math.pow(f64, @as(f64, @floatFromInt(left.int)), @as(f64, @floatFromInt(right.int))));
+                    }
+                },
+                .div => {
+                    if (right.int == 0) return error.ZeroDivisionError;
+                    return Value.makeFloat(@as(f64, @floatFromInt(left.int)) / @as(f64, @floatFromInt(right.int)));
+                },
+            }
+        }
+
         switch (op) {
             .add => {
                 if (left == .float and right == .float) return Value.makeFloat(left.float + right.float);
@@ -940,10 +1291,25 @@ pub const Interpreter = struct {
                 if (r_f == 0.0) return error.ZeroDivisionError;
                 return Value.makeFloat(l_f / r_f);
             },
-            .floor_div, .mod, .bit_and, .bit_or, .bit_xor, .lshift, .rshift => return error.TypeError,
+            .floor_div => {
+                const l_f = if (left == .float) left.float else if (left == .int) @as(f64, @floatFromInt(left.int)) else return error.TypeError;
+                const r_f = if (right == .float) right.float else if (right == .int) @as(f64, @floatFromInt(right.int)) else return error.TypeError;
+                if (r_f == 0.0) return error.ZeroDivisionError;
+                return Value.makeFloat(@floor(l_f / r_f));
+            },
+            .mod => {
+                if (left == .float or right == .float) {
+                    const l_f = if (left == .float) left.float else @as(f64, @floatFromInt(left.int));
+                    const r_f = if (right == .float) right.float else @as(f64, @floatFromInt(right.int));
+                    if (r_f == 0.0) return error.ZeroDivisionError;
+                    return Value.makeFloat(@mod(l_f, r_f));
+                }
+                return error.TypeError;
+            },
+            .bit_and, .bit_or, .bit_xor, .lshift, .rshift => return error.TypeError,
             .pow => {
-                const l_f = if (left == .float) left.float else @as(f64, @floatFromInt(left.int));
-                const r_f = if (right == .float) right.float else @as(f64, @floatFromInt(right.int));
+                const l_f = if (left == .float) left.float else if (left == .int) @as(f64, @floatFromInt(left.int)) else return error.TypeError;
+                const r_f = if (right == .float) right.float else if (right == .int) @as(f64, @floatFromInt(right.int)) else return error.TypeError;
                 return Value.makeFloat(std.math.pow(f64, l_f, r_f));
             },
         }
@@ -1007,6 +1373,8 @@ pub const Interpreter = struct {
                     return std.mem.indexOf(u8, right.string.bytes, left.string.bytes) != null;
                 } else if (right == .dict) {
                     return right.dict.get(left) != null;
+                } else if (right == .set) {
+                    return right.set.contains(left);
                 }
                 return false;
             },
@@ -1240,6 +1608,52 @@ pub const Interpreter = struct {
                 }
                 return error.AttributeError;
             },
+            .set => |s| {
+                if (std.mem.eql(u8, attr, "add")) {
+                    const set_add = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .set) return error.TypeError;
+                            try args[0].set.add(allocator, args[1]);
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "add", .func = set_add };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .set = s }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "remove")) {
+                    const set_remove = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .set) return error.TypeError;
+                            const ok = args[0].set.remove(args[1]);
+                            if (!ok) return error.KeyError;
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "remove", .func = set_remove };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .set = s }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "clear")) {
+                    const set_clear = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .set) return error.TypeError;
+                            args[0].set.clear();
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "clear", .func = set_clear };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .set = s }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
             else => return error.AttributeError,
         }
     }
@@ -1282,35 +1696,109 @@ pub const Interpreter = struct {
             }
         } else {
             // Slicing [lower:upper:step]
+            const step_i: i64 = if (slice.step) |se| (try self.evalExpr(se, env)).int else 1;
+            if (step_i == 0) return error.ValueError;
             const lower_i: ?i64 = if (slice.lower) |le| (try self.evalExpr(le, env)).int else null;
             const upper_i: ?i64 = if (slice.upper) |ue| (try self.evalExpr(ue, env)).int else null;
 
             if (target == .list) {
                 const len: i64 = @intCast(target.list.items.items.len);
-                var start = lower_i orelse 0;
-                var end = upper_i orelse len;
-                if (start < 0) start += len;
-                if (end < 0) end += len;
-                start = @max(0, @min(start, len));
-                end = @max(0, @min(end, len));
+                var start: i64 = undefined;
+                var end: i64 = undefined;
+                if (step_i > 0) {
+                    start = lower_i orelse 0;
+                    end = upper_i orelse len;
+                    if (start < 0) start += len;
+                    if (end < 0) end += len;
+                    start = @max(0, @min(start, len));
+                    end = @max(0, @min(end, len));
+                } else {
+                    start = lower_i orelse (len - 1);
+                    end = upper_i orelse -1;
+                    if (start < 0) start += len;
+                    if (upper_i != null and end < 0) end += len;
+                    start = @max(-1, @min(start, len - 1));
+                    end = @max(-1, @min(end, len - 1));
+                }
 
                 const new_l = try PyList.init(self.allocator);
                 var i = start;
-                while (i < end) : (i += 1) {
-                    try new_l.items.append(self.allocator, target.list.items.items[@intCast(i)]);
+                if (step_i > 0) {
+                    while (i < end) : (i += step_i) {
+                        try new_l.items.append(self.allocator, target.list.items.items[@intCast(i)]);
+                    }
+                } else {
+                    while (i > end) : (i += step_i) {
+                        try new_l.items.append(self.allocator, target.list.items.items[@intCast(i)]);
+                    }
                 }
                 return Value{ .list = new_l };
             } else if (target == .string) {
                 const len: i64 = @intCast(target.string.bytes.len);
-                var start = lower_i orelse 0;
-                var end = upper_i orelse len;
-                if (start < 0) start += len;
-                if (end < 0) end += len;
-                start = @max(0, @min(start, len));
-                end = @max(0, @min(end, len));
+                var start: i64 = undefined;
+                var end: i64 = undefined;
+                if (step_i > 0) {
+                    start = lower_i orelse 0;
+                    end = upper_i orelse len;
+                    if (start < 0) start += len;
+                    if (end < 0) end += len;
+                    start = @max(0, @min(start, len));
+                    end = @max(0, @min(end, len));
+                } else {
+                    start = lower_i orelse (len - 1);
+                    end = upper_i orelse -1;
+                    if (start < 0) start += len;
+                    if (upper_i != null and end < 0) end += len;
+                    start = @max(-1, @min(start, len - 1));
+                    end = @max(-1, @min(end, len - 1));
+                }
 
-                const sub_str = target.string.bytes[@intCast(start)..@intCast(end)];
-                return Value.makeString(self.allocator, sub_str);
+                var buf: std.ArrayList(u8) = .empty;
+                var i = start;
+                if (step_i > 0) {
+                    while (i < end) : (i += step_i) {
+                        try buf.append(self.allocator, target.string.bytes[@intCast(i)]);
+                    }
+                } else {
+                    while (i > end) : (i += step_i) {
+                        try buf.append(self.allocator, target.string.bytes[@intCast(i)]);
+                    }
+                }
+                return Value.makeString(self.allocator, buf.items);
+            } else if (target == .tuple) {
+                const len: i64 = @intCast(target.tuple.items.len);
+                var start: i64 = undefined;
+                var end: i64 = undefined;
+                if (step_i > 0) {
+                    start = lower_i orelse 0;
+                    end = upper_i orelse len;
+                    if (start < 0) start += len;
+                    if (end < 0) end += len;
+                    start = @max(0, @min(start, len));
+                    end = @max(0, @min(end, len));
+                } else {
+                    start = lower_i orelse (len - 1);
+                    end = upper_i orelse -1;
+                    if (start < 0) start += len;
+                    if (upper_i != null and end < 0) end += len;
+                    start = @max(-1, @min(start, len - 1));
+                    end = @max(-1, @min(end, len - 1));
+                }
+
+                var buf: std.ArrayList(Value) = .empty;
+                var i = start;
+                if (step_i > 0) {
+                    while (i < end) : (i += step_i) {
+                        try buf.append(self.allocator, target.tuple.items[@intCast(i)]);
+                    }
+                } else {
+                    while (i > end) : (i += step_i) {
+                        try buf.append(self.allocator, target.tuple.items[@intCast(i)]);
+                    }
+                }
+                const tup = try self.allocator.create(PyTuple);
+                tup.* = .{ .items = try buf.toOwnedSlice(self.allocator) };
+                return Value{ .tuple = tup };
             }
             return error.TypeError;
         }
@@ -1341,16 +1829,25 @@ pub const Interpreter = struct {
                 defer self.releaseEnv(call_env);
 
                 // Fast parameter binding for standard functions
-                if (f.vararg == null and f.kwarg == null and kwargs.len == 0 and f.param_names.len <= 8) {
-                    const bind_count = @min(args.len, f.param_names.len);
-                    var bi: usize = 0;
-                    while (bi < bind_count) : (bi += 1) {
-                        call_env.fast_slots[bi] = .{ .name = f.param_names[bi], .val = args[bi] };
+                if (f.vararg == null and f.kwarg == null and kwargs.len == 0 and f.param_names.len <= 32) {
+                    if (f.param_names.len == 1 and args.len == 1) {
+                        call_env.fast_slots[0] = .{ .name = f.param_names[0], .val = args[0] };
+                        call_env.fast_count = 1;
+                    } else if (f.param_names.len == 2 and args.len == 2) {
+                        call_env.fast_slots[0] = .{ .name = f.param_names[0], .val = args[0] };
+                        call_env.fast_slots[1] = .{ .name = f.param_names[1], .val = args[1] };
+                        call_env.fast_count = 2;
+                    } else {
+                        const bind_count = @min(args.len, f.param_names.len);
+                        var bi: usize = 0;
+                        while (bi < bind_count) : (bi += 1) {
+                            call_env.fast_slots[bi] = .{ .name = f.param_names[bi], .val = args[bi] };
+                        }
+                        while (bi < f.param_names.len) : (bi += 1) {
+                            call_env.fast_slots[bi] = .{ .name = f.param_names[bi], .val = if (bi < f.defaults.len) f.defaults[bi] else .none };
+                        }
+                        call_env.fast_count = @intCast(f.param_names.len);
                     }
-                    while (bi < f.param_names.len) : (bi += 1) {
-                        call_env.fast_slots[bi] = .{ .name = f.param_names[bi], .val = if (bi < f.defaults.len) f.defaults[bi] else .none };
-                    }
-                    call_env.fast_count = @intCast(f.param_names.len);
                 } else {
                     // Full parameter binding fallback
                     var arg_idx: usize = 0;

@@ -14,7 +14,7 @@ pub const Environment = struct {
     globals: ?*Environment,
 
     // Fast inline slots in CPU cache (avoids hash map allocation for 99.9% of functions!)
-    fast_slots: [8]LocalSlot = undefined,
+    fast_slots: [32]LocalSlot = undefined,
     fast_count: u8 = 0,
 
     // Lazy heap maps if local variables exceed 8 or globals are marked
@@ -67,8 +67,13 @@ pub const Environment = struct {
     pub fn getSlotPtr(self: *Environment, name: []const u8) ?*Value {
         var i: u8 = 0;
         while (i < self.fast_count) : (i += 1) {
-            if (std.mem.eql(u8, self.fast_slots[i].name, name)) {
+            if (self.fast_slots[i].name.ptr == name.ptr or std.mem.eql(u8, self.fast_slots[i].name, name)) {
                 return &self.fast_slots[i].val;
+            }
+        }
+        if (self.bindings) |*b| {
+            if (b.getPtr(name)) |v_ptr| {
+                return v_ptr;
             }
         }
         return null;
@@ -86,7 +91,7 @@ pub const Environment = struct {
         // 1. Fast inline slots (no hash computation!)
         var i: u8 = 0;
         while (i < self.fast_count) : (i += 1) {
-            if (std.mem.eql(u8, self.fast_slots[i].name, name)) {
+            if (self.fast_slots[i].name.ptr == name.ptr or std.mem.eql(u8, self.fast_slots[i].name, name)) {
                 return self.fast_slots[i].val;
             }
         }
@@ -119,14 +124,14 @@ pub const Environment = struct {
         // 1. Check existing fast slots
         var i: u8 = 0;
         while (i < self.fast_count) : (i += 1) {
-            if (std.mem.eql(u8, self.fast_slots[i].name, name)) {
+            if (self.fast_slots[i].name.ptr == name.ptr or std.mem.eql(u8, self.fast_slots[i].name, name)) {
                 self.fast_slots[i].val = val;
                 return;
             }
         }
 
         // 2. Append to fast slots if space available
-        if (self.fast_count < 8) {
+        if (self.fast_count < 32) {
             self.fast_slots[self.fast_count] = .{ .name = name, .val = val };
             self.fast_count += 1;
             return;
@@ -150,7 +155,7 @@ pub const Environment = struct {
 
         var i: u8 = 0;
         while (i < self.fast_count) : (i += 1) {
-            if (std.mem.eql(u8, self.fast_slots[i].name, name)) {
+            if (self.fast_slots[i].name.ptr == name.ptr or std.mem.eql(u8, self.fast_slots[i].name, name)) {
                 self.fast_slots[i].val = val;
                 return true;
             }

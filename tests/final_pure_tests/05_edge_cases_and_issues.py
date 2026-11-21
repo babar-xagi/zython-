@@ -72,10 +72,25 @@ if observed_v9 == [0, 0, 0, 0]:
 else:
     print("   -> CPython Behavior: All variable re-assignments reflect latest mutated value")
 
-# 7. Syntax Limitations Summary
-print("7. Syntax Features Not Implemented in Zython:")
-print("   - List comprehensions: [x for x in r] (Causes ParseError)")
-print("   - Bare tuple assignment: a, b = b, a (Requires parentheses: (a, b) = (b, a))")
-print("   - Keywords in lexer not supported in parser: nonlocal, del")
-print("   - Decorators (@decorator), 'with' statement, and generators/yield")
+# 7. Bare Tuple Assignment & List Comprehension
+a, b = 10, 20
+a, b = b, a
+print("7. Bare Tuple Assignment ('a, b = b, a'): a =", a, "b =", b)
+
+lc = [x * 2 for x in range(5) if x % 2 == 0]
+print("8. List Comprehension with Filter: lc =", lc)
+
+# 9. Set Mutation Methods (add, remove)
+s_mut = set([1, 2])
+s_mut.add(3)
+s_mut.remove(1)
+has_1 = 1 in s_mut
+has_3 = 3 in s_mut
+print("9. Set add/remove: contains 1 =", has_1, "contains 3 =", has_3)
+
+# 10. Remaining Syntax Scope
+print("10. Remaining Syntax Scope (Deferred to Future Releases):")
+print("   - Arbitrary-precision Bignums (integers > 64-bit wrap in Zython)")
+print("   - Decorators (@decorator), 'with' statement context managers")
+print("   - Generators / yield, and async/await")
 print("Ground reality edge-cases evaluation complete.")

@@ -138,6 +138,20 @@ pub const PySet = struct {
             try self.items.append(allocator, val);
         }
     }
+
+    pub fn remove(self: *PySet, val: Value) bool {
+        for (self.items.items, 0..) |item, i| {
+            if (item.equals(val)) {
+                _ = self.items.swapRemove(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    pub fn clear(self: *PySet) void {
+        self.items.clearRetainingCapacity();
+    }
 };
 
 pub const BuiltinFn = *const fn (allocator: Allocator, env_opaque: ?*anyopaque, args: []const Value, kwargs: []const DictEntry) anyerror!Value;
@@ -184,7 +198,7 @@ pub const PyClass = struct {
 
 pub const PyInstance = struct {
     class: *PyClass,
-    inline_slots: [8]FieldSlot = undefined,
+    inline_slots: [16]FieldSlot = undefined,
     inline_count: u8 = 0,
     attributes: ?std.StringHashMap(Value) = null,
 
@@ -206,7 +220,7 @@ pub const PyInstance = struct {
                 return;
             }
         }
-        if (self.inline_count < 8) {
+        if (self.inline_count < 16) {
             self.inline_slots[self.inline_count] = .{ .name = name, .val = val };
             self.inline_count += 1;
             return;
