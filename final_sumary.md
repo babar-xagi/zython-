@@ -107,19 +107,22 @@ When a loop matches the exact pattern `for i in range(...): s += <const>`, Zytho
 
 ### 1. Loop Execution Times: Specialized vs General (Seconds — Lower is Better)
 ```mermaid
+%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#F7A41D, #3776AB"}}}}%%
 xychart-beta
-    title "Loop Execution Time Comparison (s) — Real World vs Pattern Matched"
+    title "Loop Execution Time Comparison (s) — Lower is Better"
     x-axis ["10M Loop (s += 1)", "2M Loop (s = s + 1)", "2M Branching Loop", "1M Multi-stmt Loop", "Nested 2D Loop"]
     y-axis "Time (s)" 0.0 --> 0.35
     bar [0.000003, 0.08331, 0.17266, 0.08874, 0.04165]
     bar [0.328611, 0.06206, 0.12844, 0.07523, 0.04729]
 ```
-*(First Bar = ⚡ Zython | Second Bar = 🐍 CPython 3.14)*
+* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.2.0 (Optimized)**  
+* 🟦 **Second Bar (`#3776AB` - Python Steel Blue)**: 🐍 **CPython 3.14.4**
 
 ---
 
 ### 2. Startup & Compute Peak Memory Footprint (Kilobytes RSS — Lower is Better)
 ```mermaid
+%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#F7A41D, #3776AB"}}}}%%
 xychart-beta
     title "OS Peak Resident Set Size (KB RSS) — Lower is Better"
     x-axis ["Startup/EdgeCases", "Loop Mechanics", "Algorithm Suite", "CPython Baseline"]
@@ -127,7 +130,8 @@ xychart-beta
     bar [2732, 2732, 3344, 10352]
     bar [9976, 10020, 10352, 10352]
 ```
-*(First Bar = ⚡ Zython | Second Bar = 🐍 CPython 3.14)*
+* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.2.0 (Optimized)**  
+* 🟦 **Second Bar (`#3776AB` - Python Steel Blue)**: 🐍 **CPython 3.14.4**
 
 ---
 
