@@ -33,6 +33,19 @@ pub const FieldSlot = struct {
 
 pub const PyString = struct {
     bytes: []const u8,
+
+    pub fn init(allocator: Allocator, s: []const u8) !*PyString {
+        const self = try allocator.create(PyString);
+        self.* = .{ .bytes = s };
+        return self;
+    }
+
+    pub fn concat(allocator: Allocator, a: []const u8, b: []const u8) !*PyString {
+        const out = try allocator.alloc(u8, a.len + b.len);
+        @memcpy(out[0..a.len], a);
+        @memcpy(out[a.len..], b);
+        return init(allocator, out);
+    }
 };
 
 pub const PyList = struct {
@@ -42,6 +55,10 @@ pub const PyList = struct {
         const self = try allocator.create(PyList);
         self.* = .{ .items = .empty };
         return self;
+    }
+
+    pub inline fn append(self: *PyList, allocator: Allocator, val: Value) !void {
+        try self.items.append(allocator, val);
     }
 };
 
@@ -170,6 +187,71 @@ pub const PyFunction = struct {
     body_opaque: *const anyopaque,
     body_len: usize,
     closure_env: ?*anyopaque,
+    chunk: ?*anyopaque = null,
+};
+
+pub const PyIterator = struct {
+    kind: union(enum) {
+        range: struct { current: i64, stop: i64, step: i64 },
+        list: struct { list: *PyList, index: usize },
+        tuple: struct { items: []Value, index: usize },
+        set: struct { items: []Value, index: usize },
+        string: struct { str: []const u8, index: usize },
+    },
+
+    pub fn next(self: *PyIterator, allocator: Allocator) ?Value {
+        switch (self.kind) {
+            .range => |*r| {
+                if (r.step > 0) {
+                    if (r.current < r.stop) {
+                        const val = r.current;
+                        r.current += r.step;
+                        return Value.makeInt(val);
+                    }
+                } else if (r.step < 0) {
+                    if (r.current > r.stop) {
+                        const val = r.current;
+                        r.current += r.step;
+                        return Value.makeInt(val);
+                    }
+                }
+                return null;
+            },
+            .list => |*l| {
+                if (l.index < l.list.items.items.len) {
+                    const it = l.list.items.items[l.index];
+                    l.index += 1;
+                    return it;
+                }
+                return null;
+            },
+            .tuple => |*t| {
+                if (t.index < t.items.len) {
+                    const it = t.items[t.index];
+                    t.index += 1;
+                    return it;
+                }
+                return null;
+            },
+            .set => |*s| {
+                if (s.index < s.items.len) {
+                    const it = s.items[s.index];
+                    s.index += 1;
+                    return it;
+                }
+                return null;
+            },
+            .string => |*st| {
+                if (st.index < st.str.len) {
+                    const char_str = st.str[st.index .. st.index + 1];
+                    st.index += 1;
+                    const py_s = PyString.init(allocator, char_str) catch return null;
+                    return Value{ .string = py_s };
+                }
+                return null;
+            },
+        }
+    }
 };
 
 pub const PyClass = struct {
@@ -292,6 +374,7 @@ pub const Value = union(enum) {
     instance: *PyInstance,
     bound_method: *PyBoundMethod,
     module: *PyModule,
+    iterator: *PyIterator,
     return_flow,
     break_flow,
     continue_flow,
@@ -330,7 +413,7 @@ pub const Value = union(enum) {
             .dict => |d| d.entries.items.len > 0,
             .set => |s| s.items.items.len > 0,
             .range => |r| r.length() > 0,
-            .function, .builtin, .class, .instance, .bound_method, .module => true,
+            .function, .builtin, .class, .instance, .bound_method, .module, .iterator => true,
             .return_flow, .break_flow, .continue_flow => false,
         };
     }
@@ -353,6 +436,7 @@ pub const Value = union(enum) {
             .instance => |ins| ins.class.name,
             .bound_method => "method",
             .module => "module",
+            .iterator => "iterator",
             .return_flow => "return",
             .break_flow => "break",
             .continue_flow => "continue",
@@ -426,6 +510,10 @@ pub const Value = union(enum) {
             .builtin => |b| {
                 if (other != .builtin) return false;
                 return b == other.builtin;
+            },
+            .iterator => |it| {
+                if (other != .iterator) return false;
+                return it == other.iterator;
             },
             else => return false,
         }
@@ -505,6 +593,7 @@ pub const Value = union(enum) {
             .instance => |ins| return std.fmt.allocPrint(allocator, "<{s} object>", .{ins.class.name}),
             .bound_method => return "<bound method>",
             .module => |m| return std.fmt.allocPrint(allocator, "<module '{s}'>", .{m.name}),
+            .iterator => return "<iterator object>",
             .return_flow => return "return",
             .break_flow => return "break",
             .continue_flow => return "continue",

@@ -28,6 +28,12 @@ const Environment = environment_mod.Environment;
 const builtins_mod = @import("builtins.zig");
 const parser_mod = @import("parser.zig");
 const Parser = parser_mod.Parser;
+const bytecode_mod = @import("bytecode.zig");
+const Chunk = bytecode_mod.Chunk;
+const compiler_mod = @import("compiler.zig");
+const Compiler = compiler_mod.Compiler;
+const vm_mod = @import("vm.zig");
+const VM = vm_mod.VM;
 
 pub const Interpreter = struct {
     allocator: Allocator,
@@ -40,6 +46,7 @@ pub const Interpreter = struct {
     env_pool: [2048]*Environment = undefined,
     env_pool_top: usize = 0,
     return_value: Value = .none,
+    vm: VM = undefined,
 
     pub fn init(allocator: Allocator, cli_args: []const [:0]const u8) !*Interpreter {
         const self = try allocator.create(Interpreter);
@@ -58,7 +65,9 @@ pub const Interpreter = struct {
             .cli_args = cli_args,
             .env_pool_top = 0,
             .return_value = .none,
+            .vm = undefined,
         };
+        self.vm = VM.init(allocator, self);
 
         // Preallocate pool of environments
         var pi: usize = 0;
@@ -580,7 +589,40 @@ pub const Interpreter = struct {
                     .body_opaque = @ptrCast(d.body.ptr),
                     .body_len = d.body.len,
                     .closure_env = @ptrCast(env),
+                    .chunk = null,
                 };
+
+                // Compile function to Bytecode Chunk for VM execution!
+                if (vararg == null and kwarg == null) {
+                    const chunk_ptr = try self.allocator.create(Chunk);
+                    chunk_ptr.* = Chunk.init(self.allocator);
+                    var comp = Compiler.initFunction(self.allocator, chunk_ptr);
+
+                    var compile_ok = true;
+                    for (p_names) |pn| {
+                        _ = comp.addLocal(pn) catch {
+                            compile_ok = false;
+                            break;
+                        };
+                    }
+
+                    if (compile_ok) {
+                        if (comp.compileSuite(d.body)) |_| {
+                            _ = comp.emit(.op_none, 0) catch {};
+                            _ = comp.emit(.op_return, 0) catch {};
+                            comp.chunk.num_locals = comp.local_count;
+                            fn_obj.chunk = @ptrCast(chunk_ptr);
+                        } else |_| {
+                            chunk_ptr.deinit();
+                            self.allocator.destroy(chunk_ptr);
+                            fn_obj.chunk = null;
+                        }
+                    } else {
+                        chunk_ptr.deinit();
+                        self.allocator.destroy(chunk_ptr);
+                        fn_obj.chunk = null;
+                    }
+                }
 
                 const fn_val = Value{ .function = fn_obj };
                 try env.set(d.name, fn_val);
@@ -1127,6 +1169,7 @@ pub const Interpreter = struct {
                     .body_opaque = @ptrCast(ret_stmt.ptr),
                     .body_len = 1,
                     .closure_env = @ptrCast(env),
+                    .chunk = null,
                 };
                 return Value{ .function = fn_obj };
             },
@@ -1392,7 +1435,7 @@ pub const Interpreter = struct {
         }
     }
 
-    fn evalAttribute(self: *Interpreter, val: Value, attr: []const u8) !Value {
+    pub fn evalAttribute(self: *Interpreter, val: Value, attr: []const u8) !Value {
         switch (val) {
             .instance => |ins| {
                 if (ins.getAttr(self.allocator, attr)) |a| return a;
@@ -1658,150 +1701,161 @@ pub const Interpreter = struct {
         }
     }
 
+    pub fn evalSubscriptValue(self: *Interpreter, target: Value, key: Value) !Value {
+        switch (target) {
+            .list => |l| {
+                if (key != .int) return error.TypeError;
+                var idx = key.int;
+                const len: i64 = @intCast(l.items.items.len);
+                if (idx < 0) idx += len;
+                if (idx < 0 or idx >= len) return error.IndexError;
+                return l.items.items[@intCast(idx)];
+            },
+            .tuple => |t| {
+                if (key != .int) return error.TypeError;
+                var idx = key.int;
+                const len: i64 = @intCast(t.items.len);
+                if (idx < 0) idx += len;
+                if (idx < 0 or idx >= len) return error.IndexError;
+                return t.items[@intCast(idx)];
+            },
+            .string => |s| {
+                if (key != .int) return error.TypeError;
+                var idx = key.int;
+                const len: i64 = @intCast(s.bytes.len);
+                if (idx < 0) idx += len;
+                if (idx < 0 or idx >= len) return error.IndexError;
+                const cs = try self.allocator.alloc(u8, 1);
+                cs[0] = s.bytes[@intCast(idx)];
+                return Value.makeString(self.allocator, cs);
+            },
+            .dict => |d| {
+                if (d.get(key)) |v| return v;
+                return error.KeyError;
+            },
+            else => return error.TypeError,
+        }
+    }
+
     fn evalSubscript(self: *Interpreter, target: Value, slice: *ast_mod.SliceExpr, env: *Environment) !Value {
         if (slice.is_index and slice.lower != null) {
             const key = try self.evalExpr(slice.lower.?, env);
-            switch (target) {
-                .list => |l| {
-                    if (key != .int) return error.TypeError;
-                    var idx = key.int;
-                    const len: i64 = @intCast(l.items.items.len);
-                    if (idx < 0) idx += len;
-                    if (idx < 0 or idx >= len) return error.IndexError;
-                    return l.items.items[@intCast(idx)];
-                },
-                .tuple => |t| {
-                    if (key != .int) return error.TypeError;
-                    var idx = key.int;
-                    const len: i64 = @intCast(t.items.len);
-                    if (idx < 0) idx += len;
-                    if (idx < 0 or idx >= len) return error.IndexError;
-                    return t.items[@intCast(idx)];
-                },
-                .string => |s| {
-                    if (key != .int) return error.TypeError;
-                    var idx = key.int;
-                    const len: i64 = @intCast(s.bytes.len);
-                    if (idx < 0) idx += len;
-                    if (idx < 0 or idx >= len) return error.IndexError;
-                    const cs = try self.allocator.alloc(u8, 1);
-                    cs[0] = s.bytes[@intCast(idx)];
-                    return Value.makeString(self.allocator, cs);
-                },
-                .dict => |d| {
-                    if (d.get(key)) |v| return v;
-                    return error.KeyError;
-                },
-                else => return error.TypeError,
-            }
+            return self.evalSubscriptValue(target, key);
         } else {
             // Slicing [lower:upper:step]
-            const step_i: i64 = if (slice.step) |se| (try self.evalExpr(se, env)).int else 1;
-            if (step_i == 0) return error.ValueError;
-            const lower_i: ?i64 = if (slice.lower) |le| (try self.evalExpr(le, env)).int else null;
-            const upper_i: ?i64 = if (slice.upper) |ue| (try self.evalExpr(ue, env)).int else null;
-
-            if (target == .list) {
-                const len: i64 = @intCast(target.list.items.items.len);
-                var start: i64 = undefined;
-                var end: i64 = undefined;
-                if (step_i > 0) {
-                    start = lower_i orelse 0;
-                    end = upper_i orelse len;
-                    if (start < 0) start += len;
-                    if (end < 0) end += len;
-                    start = @max(0, @min(start, len));
-                    end = @max(0, @min(end, len));
-                } else {
-                    start = lower_i orelse (len - 1);
-                    end = upper_i orelse -1;
-                    if (start < 0) start += len;
-                    if (upper_i != null and end < 0) end += len;
-                    start = @max(-1, @min(start, len - 1));
-                    end = @max(-1, @min(end, len - 1));
-                }
-
-                const new_l = try PyList.init(self.allocator);
-                var i = start;
-                if (step_i > 0) {
-                    while (i < end) : (i += step_i) {
-                        try new_l.items.append(self.allocator, target.list.items.items[@intCast(i)]);
-                    }
-                } else {
-                    while (i > end) : (i += step_i) {
-                        try new_l.items.append(self.allocator, target.list.items.items[@intCast(i)]);
-                    }
-                }
-                return Value{ .list = new_l };
-            } else if (target == .string) {
-                const len: i64 = @intCast(target.string.bytes.len);
-                var start: i64 = undefined;
-                var end: i64 = undefined;
-                if (step_i > 0) {
-                    start = lower_i orelse 0;
-                    end = upper_i orelse len;
-                    if (start < 0) start += len;
-                    if (end < 0) end += len;
-                    start = @max(0, @min(start, len));
-                    end = @max(0, @min(end, len));
-                } else {
-                    start = lower_i orelse (len - 1);
-                    end = upper_i orelse -1;
-                    if (start < 0) start += len;
-                    if (upper_i != null and end < 0) end += len;
-                    start = @max(-1, @min(start, len - 1));
-                    end = @max(-1, @min(end, len - 1));
-                }
-
-                var buf: std.ArrayList(u8) = .empty;
-                var i = start;
-                if (step_i > 0) {
-                    while (i < end) : (i += step_i) {
-                        try buf.append(self.allocator, target.string.bytes[@intCast(i)]);
-                    }
-                } else {
-                    while (i > end) : (i += step_i) {
-                        try buf.append(self.allocator, target.string.bytes[@intCast(i)]);
-                    }
-                }
-                return Value.makeString(self.allocator, buf.items);
-            } else if (target == .tuple) {
-                const len: i64 = @intCast(target.tuple.items.len);
-                var start: i64 = undefined;
-                var end: i64 = undefined;
-                if (step_i > 0) {
-                    start = lower_i orelse 0;
-                    end = upper_i orelse len;
-                    if (start < 0) start += len;
-                    if (end < 0) end += len;
-                    start = @max(0, @min(start, len));
-                    end = @max(0, @min(end, len));
-                } else {
-                    start = lower_i orelse (len - 1);
-                    end = upper_i orelse -1;
-                    if (start < 0) start += len;
-                    if (upper_i != null and end < 0) end += len;
-                    start = @max(-1, @min(start, len - 1));
-                    end = @max(-1, @min(end, len - 1));
-                }
-
-                var buf: std.ArrayList(Value) = .empty;
-                var i = start;
-                if (step_i > 0) {
-                    while (i < end) : (i += step_i) {
-                        try buf.append(self.allocator, target.tuple.items[@intCast(i)]);
-                    }
-                } else {
-                    while (i > end) : (i += step_i) {
-                        try buf.append(self.allocator, target.tuple.items[@intCast(i)]);
-                    }
-                }
-                const tup = try self.allocator.create(PyTuple);
-                tup.* = .{ .items = try buf.toOwnedSlice(self.allocator) };
-                return Value{ .tuple = tup };
-            }
-            return error.TypeError;
+            const step_v = if (slice.step) |se| try self.evalExpr(se, env) else Value.none;
+            const lower_v = if (slice.lower) |le| try self.evalExpr(le, env) else Value.none;
+            const upper_v = if (slice.upper) |ue| try self.evalExpr(ue, env) else Value.none;
+            return self.evalSliceValues(target, lower_v, upper_v, step_v);
         }
+    }
+
+    pub fn evalSliceValues(self: *Interpreter, target: Value, lower_val: Value, upper_val: Value, step_val: Value) !Value {
+        const step_i: i64 = if (step_val == .int) step_val.int else 1;
+        if (step_i == 0) return error.ValueError;
+        const lower_i: ?i64 = if (lower_val == .int) lower_val.int else null;
+        const upper_i: ?i64 = if (upper_val == .int) upper_val.int else null;
+
+        if (target == .list) {
+            const len: i64 = @intCast(target.list.items.items.len);
+            var start: i64 = undefined;
+            var end: i64 = undefined;
+            if (step_i > 0) {
+                start = lower_i orelse 0;
+                end = upper_i orelse len;
+                if (start < 0) start += len;
+                if (end < 0) end += len;
+                start = @max(0, @min(start, len));
+                end = @max(0, @min(end, len));
+            } else {
+                start = lower_i orelse (len - 1);
+                end = upper_i orelse -1;
+                if (start < 0) start += len;
+                if (upper_i != null and end < 0) end += len;
+                start = @max(-1, @min(start, len - 1));
+                end = @max(-1, @min(end, len - 1));
+            }
+
+            const new_l = try PyList.init(self.allocator);
+            var i = start;
+            if (step_i > 0) {
+                while (i < end) : (i += step_i) {
+                    try new_l.items.append(self.allocator, target.list.items.items[@intCast(i)]);
+                }
+            } else {
+                while (i > end) : (i += step_i) {
+                    try new_l.items.append(self.allocator, target.list.items.items[@intCast(i)]);
+                }
+            }
+            return Value{ .list = new_l };
+        } else if (target == .string) {
+            const len: i64 = @intCast(target.string.bytes.len);
+            var start: i64 = undefined;
+            var end: i64 = undefined;
+            if (step_i > 0) {
+                start = lower_i orelse 0;
+                end = upper_i orelse len;
+                if (start < 0) start += len;
+                if (end < 0) end += len;
+                start = @max(0, @min(start, len));
+                end = @max(0, @min(end, len));
+            } else {
+                start = lower_i orelse (len - 1);
+                end = upper_i orelse -1;
+                if (start < 0) start += len;
+                if (upper_i != null and end < 0) end += len;
+                start = @max(-1, @min(start, len - 1));
+                end = @max(-1, @min(end, len - 1));
+            }
+
+            var buf: std.ArrayList(u8) = .empty;
+            var i = start;
+            if (step_i > 0) {
+                while (i < end) : (i += step_i) {
+                    try buf.append(self.allocator, target.string.bytes[@intCast(i)]);
+                }
+            } else {
+                while (i > end) : (i += step_i) {
+                    try buf.append(self.allocator, target.string.bytes[@intCast(i)]);
+                }
+            }
+            return Value.makeString(self.allocator, buf.items);
+        } else if (target == .tuple) {
+            const len: i64 = @intCast(target.tuple.items.len);
+            var start: i64 = undefined;
+            var end: i64 = undefined;
+            if (step_i > 0) {
+                start = lower_i orelse 0;
+                end = upper_i orelse len;
+                if (start < 0) start += len;
+                if (end < 0) end += len;
+                start = @max(0, @min(start, len));
+                end = @max(0, @min(end, len));
+            } else {
+                start = lower_i orelse (len - 1);
+                end = upper_i orelse -1;
+                if (start < 0) start += len;
+                if (upper_i != null and end < 0) end += len;
+                start = @max(-1, @min(start, len - 1));
+                end = @max(-1, @min(end, len - 1));
+            }
+
+            var buf: std.ArrayList(Value) = .empty;
+            var i = start;
+            if (step_i > 0) {
+                while (i < end) : (i += step_i) {
+                    try buf.append(self.allocator, target.tuple.items[@intCast(i)]);
+                }
+            } else {
+                while (i > end) : (i += step_i) {
+                    try buf.append(self.allocator, target.tuple.items[@intCast(i)]);
+                }
+            }
+            const tup = try self.allocator.create(PyTuple);
+            tup.* = .{ .items = try buf.toOwnedSlice(self.allocator) };
+            return Value{ .tuple = tup };
+        }
+        return error.TypeError;
     }
 
     pub fn callValue(self: *Interpreter, callee: Value, args: []const Value, kwargs: []const DictEntry) anyerror!Value {
@@ -1823,6 +1877,10 @@ pub const Interpreter = struct {
                 return b.func(self.allocator, null, args, kwargs);
             },
             .function => |f| {
+                if (f.chunk) |chunk_opaque| {
+                    const chunk: *const Chunk = @ptrCast(@alignCast(chunk_opaque));
+                    return self.vm.runFunction(f, chunk, args, kwargs);
+                }
                 const parent_env: ?*Environment = if (f.closure_env) |ce| @ptrCast(@alignCast(ce)) else self.global_env;
                 // Acquire reusable environment from pool with ZERO heap allocation
                 const call_env = self.acquireEnv(parent_env);
