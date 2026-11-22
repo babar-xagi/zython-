@@ -685,6 +685,11 @@ pub fn makeTimeModule(allocator: Allocator) !Value {
     return Value{ .module = mod };
 }
 
+pub fn builtinExit(_: Allocator, _: ?*anyopaque, exit_args: []const Value, _: []const DictEntry) anyerror!Value {
+    const code: u8 = if (exit_args.len > 0 and exit_args[0] == .int) @intCast(exit_args[0].int) else 0;
+    std.process.exit(code);
+}
+
 // Module: sys
 pub fn makeSysModule(allocator: Allocator, args: []const [:0]const u8) !Value {
     const mod = try PyModule.init(allocator, "sys");
@@ -698,14 +703,8 @@ pub fn makeSysModule(allocator: Allocator, args: []const [:0]const u8) !Value {
     }
     try mod.attributes.put("argv", Value{ .list = py_argv });
 
-    const sys_exit = struct {
-        fn call(_: Allocator, _: ?*anyopaque, exit_args: []const Value, _: []const DictEntry) anyerror!Value {
-            const code: u8 = if (exit_args.len > 0 and exit_args[0] == .int) @intCast(exit_args[0].int) else 0;
-            std.process.exit(code);
-        }
-    }.call;
     const b_exit = try allocator.create(PyBuiltin);
-    b_exit.* = .{ .name = "exit", .func = sys_exit };
+    b_exit.* = .{ .name = "exit", .func = builtinExit };
     try mod.attributes.put("exit", Value{ .builtin = b_exit });
 
     return Value{ .module = mod };
@@ -780,6 +779,8 @@ pub fn populateBuiltins(allocator: Allocator, env: *Environment) !void {
         .{ .name = "sorted", .func = builtinSorted },
         .{ .name = "next", .func = builtinNext },
         .{ .name = "iter", .func = builtinIter },
+        .{ .name = "exit", .func = builtinExit },
+        .{ .name = "quit", .func = builtinExit },
     };
 
     for (defs) |d| {
