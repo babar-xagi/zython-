@@ -20,6 +20,16 @@ pub const Opcode = enum(u8) {
     op_load_global,
     op_store_global,
 
+    // Superinstructions: Fast Register Access
+    op_load_fast_0,
+    op_load_fast_1,
+    op_load_fast_2,
+    op_load_fast_3,
+    op_store_fast_0,
+    op_store_fast_1,
+    op_store_fast_2,
+    op_store_fast_3,
+
     // Binary Arithmetic & Bitwise
     op_add,
     op_sub,
@@ -33,6 +43,19 @@ pub const Opcode = enum(u8) {
     op_bit_xor,
     op_lshift,
     op_rshift,
+
+    // Specialized Integer Arithmetic (PEP 659 Quickening)
+    op_add_int,
+    op_sub_int,
+    op_mul_int,
+    op_floor_div_int,
+    op_mod_int,
+
+    // Specialized Float Arithmetic
+    op_add_float,
+    op_sub_float,
+    op_mul_float,
+    op_div_float,
 
     // Unary
     op_neg,
@@ -51,6 +74,14 @@ pub const Opcode = enum(u8) {
     op_is,
     op_is_not,
 
+    // Specialized Integer Comparisons
+    op_lt_int,
+    op_le_int,
+    op_gt_int,
+    op_ge_int,
+    op_eq_int,
+    op_ne_int,
+
     // Control Flow & Branching
     op_jump,
     op_jump_if_false,
@@ -61,12 +92,16 @@ pub const Opcode = enum(u8) {
     // Loops & Iteration
     op_get_iter,
     op_for_iter,
+    op_for_iter_range,
 
     // Subscripts & Attributes
     op_get_subscript,
     op_set_subscript,
+    op_get_subscript_list,
+    op_set_subscript_list,
     op_get_slice,
     op_get_attr,
+    op_get_attr_cached,
     op_set_attr,
 
     // Collections
@@ -90,12 +125,20 @@ pub const Instruction = packed struct {
     arg: u24 = 0,
 };
 
+pub const InlineCache = struct {
+    cached_class: ?*anyopaque = null,
+    slot_index: u16 = 65535,
+    name_idx: u24 = 0,
+};
+
 pub const Chunk = struct {
     allocator: Allocator,
     code: std.ArrayList(Instruction),
     constants: std.ArrayList(Value),
     names: std.ArrayList([]const u8),
     lines: std.ArrayList(u32),
+    ic_entries: std.ArrayList(InlineCache),
+    global_cache: [128]?Value = @splat(null),
     num_locals: u32 = 0,
 
     pub fn init(allocator: Allocator) Chunk {
@@ -105,6 +148,8 @@ pub const Chunk = struct {
             .constants = .empty,
             .names = .empty,
             .lines = .empty,
+            .ic_entries = .empty,
+            .global_cache = @splat(null),
         };
     }
 
@@ -113,6 +158,7 @@ pub const Chunk = struct {
         self.constants.deinit(self.allocator);
         self.names.deinit(self.allocator);
         self.lines.deinit(self.allocator);
+        self.ic_entries.deinit(self.allocator);
     }
 
     pub inline fn write(self: *Chunk, op: Opcode, arg: u24, line: u32) !usize {
@@ -140,6 +186,16 @@ pub const Chunk = struct {
         }
         const idx = self.names.items.len;
         try self.names.append(self.allocator, name);
+        return @intCast(idx);
+    }
+
+    pub inline fn addCache(self: *Chunk, name_idx: u24) !u24 {
+        const idx = self.ic_entries.items.len;
+        try self.ic_entries.append(self.allocator, .{
+            .cached_class = null,
+            .slot_index = 65535,
+            .name_idx = name_idx,
+        });
         return @intCast(idx);
     }
 

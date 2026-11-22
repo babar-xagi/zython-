@@ -52,6 +52,26 @@ pub const Compiler = struct {
         return self.chunk.write(op, arg, 0);
     }
 
+    pub inline fn emitLoadFast(self: *Compiler, slot: u8) !usize {
+        return switch (slot) {
+            0 => self.emit(.op_load_fast_0, 0),
+            1 => self.emit(.op_load_fast_1, 0),
+            2 => self.emit(.op_load_fast_2, 0),
+            3 => self.emit(.op_load_fast_3, 0),
+            else => self.emit(.op_load_fast, slot),
+        };
+    }
+
+    pub inline fn emitStoreFast(self: *Compiler, slot: u8) !usize {
+        return switch (slot) {
+            0 => self.emit(.op_store_fast_0, 0),
+            1 => self.emit(.op_store_fast_1, 0),
+            2 => self.emit(.op_store_fast_2, 0),
+            3 => self.emit(.op_store_fast_3, 0),
+            else => self.emit(.op_store_fast, slot),
+        };
+    }
+
     pub fn enterScope(self: *Compiler) void {
         self.scope_depth += 1;
     }
@@ -113,10 +133,10 @@ pub const Compiler = struct {
                 switch (aa.target.*) {
                     .identifier => |id| {
                         if (self.resolveLocal(id.name)) |slot| {
-                            _ = try self.emit(.op_load_fast, slot);
+                            _ = try self.emitLoadFast(slot);
                             try self.compileExpr(aa.value);
                             try self.emitBinaryOp(aa.op);
-                            _ = try self.emit(.op_store_fast, slot);
+                            _ = try self.emitStoreFast(slot);
                         } else {
                             const name_idx = try self.chunk.addName(id.name);
                             _ = try self.emit(.op_load_global, name_idx);
@@ -129,7 +149,8 @@ pub const Compiler = struct {
                         try self.compileExpr(att.value);
                         _ = try self.emit(.op_dup, 0);
                         const name_idx = try self.chunk.addName(att.attr);
-                        _ = try self.emit(.op_get_attr, name_idx);
+                        const cache_idx = try self.chunk.addCache(name_idx);
+                        _ = try self.emit(.op_get_attr, cache_idx);
                         try self.compileExpr(aa.value);
                         try self.emitBinaryOp(aa.op);
                         _ = try self.emit(.op_set_attr, name_idx);
@@ -261,7 +282,7 @@ pub const Compiler = struct {
                 } else return error.SyntaxError;
             },
             .pass_stmt => {},
-            else => {},
+            else => return error.UnsupportedStmt,
         }
     }
 
@@ -269,10 +290,10 @@ pub const Compiler = struct {
         switch (target.*) {
             .identifier => |id| {
                 if (self.resolveLocal(id.name)) |slot| {
-                    _ = try self.emit(.op_store_fast, slot);
+                    _ = try self.emitStoreFast(slot);
                 } else if (self.scope_depth > 0) {
                     const slot = try self.addLocal(id.name);
-                    _ = try self.emit(.op_store_fast, slot);
+                    _ = try self.emitStoreFast(slot);
                 } else {
                     const name_idx = try self.chunk.addName(id.name);
                     _ = try self.emit(.op_store_global, name_idx);
@@ -315,7 +336,7 @@ pub const Compiler = struct {
             },
             .identifier => |id| {
                 if (self.resolveLocal(id.name)) |slot| {
-                    _ = try self.emit(.op_load_fast, slot);
+                    _ = try self.emitLoadFast(slot);
                 } else {
                     const name_idx = try self.chunk.addName(id.name);
                     _ = try self.emit(.op_load_global, name_idx);
@@ -396,7 +417,8 @@ pub const Compiler = struct {
             .attribute => |att| {
                 try self.compileExpr(att.value);
                 const name_idx = try self.chunk.addName(att.attr);
-                _ = try self.emit(.op_get_attr, name_idx);
+                const cache_idx = try self.chunk.addCache(name_idx);
+                _ = try self.emit(.op_get_attr, cache_idx);
             },
             .subscript => |sub| {
                 try self.compileExpr(sub.value);
@@ -469,7 +491,7 @@ pub const Compiler = struct {
                 _ = try self.emit(.op_jump, @intCast(loop_start));
                 self.chunk.patchJump(iter_jump, self.chunk.code.items.len);
             },
-            else => {},
+            else => return error.UnsupportedExpr,
         }
     }
 

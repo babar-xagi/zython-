@@ -1878,7 +1878,7 @@ pub const Interpreter = struct {
             },
             .function => |f| {
                 if (f.chunk) |chunk_opaque| {
-                    const chunk: *const Chunk = @ptrCast(@alignCast(chunk_opaque));
+                    const chunk: *Chunk = @ptrCast(@alignCast(chunk_opaque));
                     return self.vm.runFunction(f, chunk, args, kwargs);
                 }
                 const parent_env: ?*Environment = if (f.closure_env) |ce| @ptrCast(@alignCast(ce)) else self.global_env;
