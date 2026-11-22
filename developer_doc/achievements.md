@@ -424,6 +424,32 @@ With the delivery of **Phase 6**, Zython has resolved the remaining edge cases a
 
 ---
 
+## ⚡ 9. Block-Based Interactive REPL Terminal (Jupyter Notebook & JetBrains New Terminal Design)
+
+Zython now includes an interactive REPL terminal (`./zig-out/bin/zython`) modeled after the block structure of **Jupyter Notebook cells** and the modern **JetBrains Terminal 2.0 block UI**:
+
+### 🌟 Key REPL Architectural Features:
+1. **Isolated Block/Cell Encapsulation**:
+   - Each input/evaluation is framed within a distinct visual cell:
+     - Top Border Header: `╭── In [1] ─────────────────────────────────────────────────────────────`
+     - Code Input: `│ >>> ` and `│ ...     `
+     - Expression Output: `├── Out [1] ────────────────────────────────────────────────────────────` followed by `│ <repr>`
+     - Cell Footer: `╰── ✓ ⚡ 5.5µs ─────────────────────────────────────────────────────────`
+2. **JetBrains Status Margin & Error Gutter (`▌`)**:
+   - Left-gutter status indicators highlight execution health:
+     - Active / Running: Python Blue (`#3776AB`) & Zig Amber (`#F7A41D`).
+     - Success: Green `✓` with microsecond execution timer badge (`⚡ 5.5µs`).
+     - Error: Distinct JetBrains Red block `▌` with detailed diagnostic breakdown (`├── ✗ SyntaxError`, `├── ✗ NameError`, etc.).
+3. **Session-Persistent Arena Memory**:
+   - Functions defined in one cell (`def home(): ...`), classes, and global variables remain accessible across subsequent cells via a persistent session arena allocator.
+4. **Auto-Indentation & Continuation Alignment**:
+   - Automatic 4-space indent tracking for block statements (`def`, `class`, `for`, `if`, `while`, `try`).
+   - Clean prompt width normalization ensuring `>>> ` and `... ` align precisely at column 6.
+5. **Dynamic Terminal Width Detection**:
+   - Automatically probes `ioctl(TIOCGWINSZ)` to render block borders perfectly fitted to terminal dimensions.
+
+---
+
 ## ⚡ 8. Phase 7 Achievements: Stackless Generators, Coroutines & Async/Await (v0.7.0)
 
 With the delivery of **Phase 7**, Zython achieves full modern asynchronous and generative programming parity with CPython:
@@ -455,3 +481,29 @@ With the delivery of **Phase 7**, Zython achieves full modern asynchronous and g
 | **Insertion Sort (1,500 elements)** | **0.00237 s** ⚡ | 0.06231 s | 🏆 **Zython is 26.3× FASTER** |
 | **Primes up to 15,000** | **0.00076 s** ⚡ | 0.01180 s | 🏆 **Zython is 15.5× FASTER** |
 | **All 5 Test Suites** | **100% Passing** | **100% Passing** | 🏆 **Zero Errors / Zero Crashes** |
+
+---
+
+## ⚡ 9. Block-Based Interactive REPL Terminal (Jupyter Notebook & JetBrains New Terminal Design)
+
+Zython now includes an interactive REPL terminal (`./zig-out/bin/zython`) modeled after the block structure of **Jupyter Notebook cells** and the modern **JetBrains Terminal 2.0 block UI**:
+
+### 🌟 Key REPL Architectural Features:
+1. **Isolated Block/Cell Encapsulation**:
+   - Each input/evaluation is framed within a distinct visual cell:
+     - Top Border Header: `╭── In [1] ─────────────────────────────────────────────────────────────`
+     - Code Input: `│ >>> ` and `│ ...     `
+     - Expression Output: `├── Out [1] ────────────────────────────────────────────────────────────` followed by `│ <repr>`
+     - Cell Footer: `╰── ✓ ⚡ 5.5µs ─────────────────────────────────────────────────────────`
+2. **JetBrains Status Margin & Error Gutter (`▌`)**:
+   - Left-gutter status indicators highlight execution health:
+     - Active / Running: Python Blue (`#3776AB`) & Zig Amber (`#F7A41D`).
+     - Success: Green `✓` with microsecond execution timer badge (`⚡ 5.5µs`).
+     - Error: Distinct JetBrains Red block `▌` with detailed diagnostic breakdown (`├── ✗ SyntaxError`, `├── ✗ NameError`, etc.).
+3. **Session-Persistent Arena Memory**:
+   - Functions defined in one cell (`def home(): ...`), classes, and global variables remain accessible across subsequent cells via a persistent session arena allocator.
+4. **Auto-Indentation & Continuation Alignment**:
+   - Automatic 4-space indent tracking for block statements (`def`, `class`, `for`, `if`, `while`, `try`).
+   - Clean prompt width normalization ensuring `>>> ` and `... ` align precisely at column 6.
+5. **Dynamic Terminal Width Detection**:
+   - Automatically probes `ioctl(TIOCGWINSZ)` to render block borders perfectly fitted to terminal dimensions.

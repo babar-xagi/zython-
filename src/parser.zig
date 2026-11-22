@@ -25,6 +25,7 @@ pub const Parser = struct {
     lexer: Lexer,
     current: Token,
     previous: Token,
+    last_error: ?[]const u8 = null,
 
     pub fn init(allocator: Allocator, source: []const u8) !Parser {
         var lex = Lexer.init(allocator, source);
@@ -34,6 +35,7 @@ pub const Parser = struct {
             .lexer = lex,
             .current = cur,
             .previous = cur,
+            .last_error = null,
         };
     }
 
@@ -63,13 +65,13 @@ pub const Parser = struct {
             try self.advance();
             return self.previous;
         }
-        std.debug.print("Parser error at line {d}:{d}: expected {s}, got {s}. {s}\n", .{
-            self.current.line,
-            self.current.column,
+        self.last_error = std.fmt.allocPrint(self.allocator, "expected '{s}', got '{s}'. {s} at line {d}:{d}", .{
             @tagName(tag),
             @tagName(self.current.tag),
             msg,
-        });
+            self.current.line,
+            self.current.column,
+        }) catch null;
         return error.ParseError;
     }
 
@@ -1156,12 +1158,12 @@ pub const Parser = struct {
             }
         }
 
-        std.debug.print("Unexpected token in primary expression: {s} ('{s}') at {d}:{d}\n", .{
+        self.last_error = std.fmt.allocPrint(self.allocator, "unexpected token in primary expression: {s} ('{s}') at line {d}:{d}", .{
             @tagName(self.current.tag),
             self.current.lexeme,
             self.current.line,
             self.current.column,
-        });
+        }) catch null;
         return error.ParseError;
     }
 };

@@ -54,6 +54,7 @@ pub const Interpreter = struct {
     current_yield_gen: ?*PyGenerator = null,
     vm: VM = undefined,
     jit: JitEngine = undefined,
+    last_error_msg: ?[]const u8 = null,
 
     pub fn init(allocator: Allocator, cli_args: []const [:0]const u8) !*Interpreter {
         const self = try allocator.create(Interpreter);
@@ -74,6 +75,7 @@ pub const Interpreter = struct {
             .return_value = .none,
             .vm = undefined,
             .jit = undefined,
+            .last_error_msg = null,
         };
         self.vm = VM.init(allocator, self);
         self.jit = JitEngine.init(allocator);
@@ -1108,7 +1110,7 @@ pub const Interpreter = struct {
                     }
                     return v;
                 }
-                std.debug.print("NameError: name '{s}' is not defined\n", .{id.name});
+                self.last_error_msg = std.fmt.allocPrint(self.allocator, "name '{s}' is not defined", .{id.name}) catch null;
                 return error.NameError;
             },
             .binary => |b| {
@@ -1782,17 +1784,17 @@ pub const Interpreter = struct {
         switch (val) {
             .instance => |ins| {
                 if (ins.getAttr(self.allocator, attr)) |a| return a;
-                std.debug.print("AttributeError: '{s}' object has no attribute '{s}'\n", .{ ins.class.name, attr });
+                self.last_error_msg = std.fmt.allocPrint(self.allocator, "'{s}' object has no attribute '{s}'", .{ ins.class.name, attr }) catch null;
                 return error.AttributeError;
             },
             .class => |cls| {
                 if (cls.lookup(attr)) |a| return a;
-                std.debug.print("AttributeError: type object '{s}' has no attribute '{s}'\n", .{ cls.name, attr });
+                self.last_error_msg = std.fmt.allocPrint(self.allocator, "type object '{s}' has no attribute '{s}'", .{ cls.name, attr }) catch null;
                 return error.AttributeError;
             },
             .module => |mod| {
                 if (mod.attributes.get(attr)) |a| return a;
-                std.debug.print("AttributeError: module '{s}' has no attribute '{s}'\n", .{ mod.name, attr });
+                self.last_error_msg = std.fmt.allocPrint(self.allocator, "module '{s}' has no attribute '{s}'", .{ mod.name, attr }) catch null;
                 return error.AttributeError;
             },
             .string => |s| {
