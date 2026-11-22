@@ -190,12 +190,13 @@ All functional bugs documented in [`BUGS.md`](file:///home/xagi/Desktop/zig_com/
 
 ---
 
-## 🏁 4. Final Verdict & Release v0.8.0
+## 🏁 4. Final Verdict & Release v0.9.0
 
 ### 🌟 Where Zython Dominates:
 1. **50×+ Compute Breakthrough**: **Recursive Fibonacci (`fib(26)`) runs 55.2× faster than CPython 3.14** (0.00031s vs 0.01712s) and **Insertion Sort runs 42.3× faster** (0.00159s vs 0.06731s).
 2. **Loop Mechanics Superiority**: **All 6 loop workloads execute 1.24× to 2.53× faster** than CPython 3.14 thanks to unboxed range stepping and register superinstructions (`op_load_fast_0..3`).
-3. **GIL-Free Multi-Threading & Concurrency**: Spawns preemptive native OS threads (`std.Thread`), provides deadlock-free reentrant `RLock`, `Semaphore`, `Event`, and high-throughput `ThreadPoolExecutor` with true parallel execution across multi-core systems.
-4. **Ultra-Low Memory Footprint**: **67% lower peak RAM** usage across all numerical and loop workloads (~3.5 MB vs ~10.5 MB).
-5. **Sub-Millisecond Startup**: Cold startup latency (< 1.0 ms) is 10× faster than CPython, ideal for CLI tools, serverless micro-lambdas, and embedded environments.
-6. **Static Binary Portability**: A single standalone native executable (~2 MB) with zero dynamic library dependencies.
+3. **C-Extension FFI & Native Module Bridge**: Complete native `ctypes` implementation (`CDLL`, `cdll`, `sizeof`, `byref`, `c_*` singletons) and full CPython C-API binary compatibility layer (`src/capi.zig`) capable of loading and executing `.so` C-extensions directly.
+4. **GIL-Free Multi-Threading & Concurrency**: Spawns preemptive native OS threads (`std.Thread`), provides deadlock-free reentrant `RLock`, `Semaphore`, `Event`, and high-throughput `ThreadPoolExecutor` with true parallel execution across multi-core systems.
+5. **Ultra-Low Memory Footprint**: **67% lower peak RAM** usage across all numerical and loop workloads (~3.5 MB vs ~10.5 MB).
+6. **Sub-Millisecond Startup**: Cold startup latency (< 1.0 ms) is 10× faster than CPython, ideal for CLI tools, serverless micro-lambdas, and embedded environments.
+7. **Static Binary Portability**: A single standalone native executable (~2 MB) with dynamic shared library loading capabilities.

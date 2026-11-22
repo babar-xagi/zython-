@@ -39,6 +39,7 @@ const vm_mod = @import("vm.zig");
 const VM = vm_mod.VM;
 const jit_mod = @import("jit.zig");
 const JitEngine = jit_mod.JitEngine;
+const capi = @import("capi.zig");
 
 pub threadlocal var current_vm: ?*VM = null;
 
@@ -116,6 +117,10 @@ pub const Interpreter = struct {
         const mod_concurrent = try value_mod.PyModule.init(allocator, "concurrent");
         try mod_concurrent.attributes.put("futures", mod_cf);
         try self.modules.put("concurrent", Value{ .module = mod_concurrent });
+
+        capi.initCApi(allocator);
+        const mod_ctypes = try builtins_mod.makeCtypesModule(allocator);
+        try self.modules.put("ctypes", mod_ctypes);
 
         return self;
     }
@@ -971,9 +976,50 @@ pub const Interpreter = struct {
                     }
                     return .none;
                 }
+
+                var sp_buf1: [256]u8 = undefined;
+                var sp_buf2: [256]u8 = undefined;
+                var sp_buf3: [256]u8 = undefined;
+                const search_paths = [_][]const u8{
+                    std.fmt.bufPrint(&sp_buf1, "./{s}.so", .{im.module_name}) catch "",
+                    std.fmt.bufPrint(&sp_buf2, "{s}.so", .{im.module_name}) catch "",
+                    std.fmt.bufPrint(&sp_buf3, "/tmp/{s}.so", .{im.module_name}) catch "",
+                };
+                for (search_paths) |sp| {
+                    if (sp.len == 0) continue;
+                    if (capi.loadCExtensionModule(self.allocator, im.module_name, sp)) |c_mod| {
+                        const mod_val = Value{ .module = c_mod };
+                        try self.modules.put(im.module_name, mod_val);
+                        if (im.as_name) |as_n| {
+                            try env.set(as_n, mod_val);
+                        } else {
+                            try env.set(im.module_name, mod_val);
+                        }
+                        return .none;
+                    } else |_| {}
+                }
+
                 return error.ImportError;
             },
             .import_from_stmt => |ifm| {
+                if (self.modules.get(ifm.module_name) == null) {
+                    var ifm_buf1: [256]u8 = undefined;
+                    var ifm_buf2: [256]u8 = undefined;
+                    var ifm_buf3: [256]u8 = undefined;
+                    const search_paths = [_][]const u8{
+                        std.fmt.bufPrint(&ifm_buf1, "./{s}.so", .{ifm.module_name}) catch "",
+                        std.fmt.bufPrint(&ifm_buf2, "{s}.so", .{ifm.module_name}) catch "",
+                        std.fmt.bufPrint(&ifm_buf3, "/tmp/{s}.so", .{ifm.module_name}) catch "",
+                    };
+                    for (search_paths) |sp| {
+                        if (sp.len == 0) continue;
+                        if (capi.loadCExtensionModule(self.allocator, ifm.module_name, sp)) |c_mod| {
+                            const mod_val = Value{ .module = c_mod };
+                            try self.modules.put(ifm.module_name, mod_val);
+                            break;
+                        } else |_| {}
+                    }
+                }
                 if (self.modules.get(ifm.module_name)) |mod_val| {
                     if (mod_val == .module) {
                         for (ifm.names, 0..) |n, idx| {
@@ -1088,6 +1134,21 @@ pub const Interpreter = struct {
                     try ins.setAttr(self.allocator, att.attr, val);
                 } else if (obj == .module) {
                     try obj.module.attributes.put(att.attr, val);
+                } else if (obj == .c_func) {
+                    if (std.mem.eql(u8, att.attr, "restype")) {
+                        if (val == .c_type) {
+                            obj.c_func.restype = val.c_type;
+                        }
+                    } else if (std.mem.eql(u8, att.attr, "argtypes")) {
+                        if (val == .list) {
+                            obj.c_func.argtypes.clearRetainingCapacity();
+                            for (val.list.items.items) |it| {
+                                if (it == .c_type) {
+                                    try obj.c_func.argtypes.append(self.allocator, it.c_type);
+                                }
+                            }
+                        }
+                    }
                 } else {
                     return error.AttributeError;
                 }
@@ -2573,6 +2634,25 @@ pub const Interpreter = struct {
                 }
                 return error.AttributeError;
             },
+            .c_dll => |d| {
+                if (d.lookupSymbol(attr)) |sym| {
+                    return sym;
+                }
+                return error.AttributeError;
+            },
+            .c_func => |cf| {
+                if (std.mem.eql(u8, attr, "restype")) {
+                    return Value{ .c_type = cf.restype };
+                }
+                if (std.mem.eql(u8, attr, "argtypes")) {
+                    const l = try PyList.init(self.allocator);
+                    for (cf.argtypes.items) |at| {
+                        try l.items.append(self.allocator, Value{ .c_type = at });
+                    }
+                    return Value{ .list = l };
+                }
+                return error.AttributeError;
+            },
             else => return error.AttributeError,
         }
     }
@@ -2734,6 +2814,148 @@ pub const Interpreter = struct {
         return error.TypeError;
     }
 
+    pub fn callCFunc(self: *Interpreter, func: *value_mod.PyCFunc, args: []const Value) anyerror!Value {
+        if (func.is_c_extension) {
+            const tup_obj = capi.PyTuple_New(@intCast(args.len)) orelse return error.OutOfMemory;
+            for (args, 0..) |arg, i| {
+                const py_arg = capi.valueToPyObject(self.allocator, arg);
+                _ = capi.PyTuple_SetItem(tup_obj, @intCast(i), py_arg);
+            }
+            const fn_ptr: *const fn (?*capi.PyObject, ?*capi.PyObject) callconv(.c) ?*capi.PyObject = @ptrFromInt(func.addr);
+            const res_obj = fn_ptr(null, tup_obj);
+            return capi.pyObjectToValue(self.allocator, res_obj, func.restype);
+        }
+
+        const is_float_ret = (func.restype == .c_double or func.restype == .c_float);
+        const is_str_ret = (func.restype == .c_char_p);
+        const is_void_ret = (func.restype == .c_void);
+
+        var int_args = [_]i64{ 0, 0, 0, 0, 0, 0 };
+        var float_args = [_]f64{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+        var has_floats = false;
+
+        for (args, 0..) |arg, i| {
+            if (i >= 6) break;
+            switch (arg) {
+                .int => |n| {
+                    int_args[i] = n;
+                    float_args[i] = @floatFromInt(n);
+                },
+                .float => |f| {
+                    has_floats = true;
+                    float_args[i] = f;
+                    int_args[i] = @intFromFloat(f);
+                },
+                .bool => |b| {
+                    int_args[i] = if (b) 1 else 0;
+                },
+                .string => |s| {
+                    const z = try self.allocator.allocSentinel(u8, s.bytes.len, 0);
+                    @memcpy(z, s.bytes);
+                    int_args[i] = @intCast(@intFromPtr(z.ptr));
+                },
+                else => {},
+            }
+        }
+
+        if (is_float_ret or has_floats) {
+            switch (args.len) {
+                0 => {
+                    const F = *const fn () callconv(.c) f64;
+                    const f: F = @ptrFromInt(func.addr);
+                    return Value.makeFloat(f());
+                },
+                1 => {
+                    const F = *const fn (f64) callconv(.c) f64;
+                    const f: F = @ptrFromInt(func.addr);
+                    return Value.makeFloat(f(float_args[0]));
+                },
+                2 => {
+                    const F = *const fn (f64, f64) callconv(.c) f64;
+                    const f: F = @ptrFromInt(func.addr);
+                    return Value.makeFloat(f(float_args[0], float_args[1]));
+                },
+                else => {
+                    const F = *const fn (f64, f64, f64) callconv(.c) f64;
+                    const f: F = @ptrFromInt(func.addr);
+                    return Value.makeFloat(f(float_args[0], float_args[1], float_args[2]));
+                },
+            }
+        } else if (is_str_ret) {
+            switch (args.len) {
+                0 => {
+                    const F = *const fn () callconv(.c) ?[*:0]const u8;
+                    const f: F = @ptrFromInt(func.addr);
+                    if (f()) |s| {
+                        const span = std.mem.span(s);
+                        return Value.makeString(self.allocator, span);
+                    }
+                    return .none;
+                },
+                1 => {
+                    const F = *const fn (i64) callconv(.c) ?[*:0]const u8;
+                    const f: F = @ptrFromInt(func.addr);
+                    if (f(int_args[0])) |s| {
+                        const span = std.mem.span(s);
+                        return Value.makeString(self.allocator, span);
+                    }
+                    return .none;
+                },
+                else => {
+                    const F = *const fn (i64, i64) callconv(.c) ?[*:0]const u8;
+                    const f: F = @ptrFromInt(func.addr);
+                    if (f(int_args[0], int_args[1])) |s| {
+                        const span = std.mem.span(s);
+                        return Value.makeString(self.allocator, span);
+                    }
+                    return .none;
+                },
+            }
+        } else {
+            var ret: i64 = 0;
+            switch (args.len) {
+                0 => {
+                    const F = *const fn () callconv(.c) i64;
+                    const f: F = @ptrFromInt(func.addr);
+                    ret = f();
+                },
+                1 => {
+                    const F = *const fn (i64) callconv(.c) i64;
+                    const f: F = @ptrFromInt(func.addr);
+                    ret = f(int_args[0]);
+                },
+                2 => {
+                    const F = *const fn (i64, i64) callconv(.c) i64;
+                    const f: F = @ptrFromInt(func.addr);
+                    ret = f(int_args[0], int_args[1]);
+                },
+                3 => {
+                    const F = *const fn (i64, i64, i64) callconv(.c) i64;
+                    const f: F = @ptrFromInt(func.addr);
+                    ret = f(int_args[0], int_args[1], int_args[2]);
+                },
+                4 => {
+                    const F = *const fn (i64, i64, i64, i64) callconv(.c) i64;
+                    const f: F = @ptrFromInt(func.addr);
+                    ret = f(int_args[0], int_args[1], int_args[2], int_args[3]);
+                },
+                5 => {
+                    const F = *const fn (i64, i64, i64, i64, i64) callconv(.c) i64;
+                    const f: F = @ptrFromInt(func.addr);
+                    ret = f(int_args[0], int_args[1], int_args[2], int_args[3], int_args[4]);
+                },
+                else => {
+                    const F = *const fn (i64, i64, i64, i64, i64, i64) callconv(.c) i64;
+                    const f: F = @ptrFromInt(func.addr);
+                    ret = f(int_args[0], int_args[1], int_args[2], int_args[3], int_args[4], int_args[5]);
+                },
+            }
+            if (is_void_ret) return .none;
+            if (func.restype == .c_bool) return Value.makeBool(ret != 0);
+            return Value.makeInt(ret);
+        }
+    }
+
     pub fn callValue(self: *Interpreter, callee: Value, args: []const Value, kwargs: []const DictEntry) anyerror!Value {
         switch (callee) {
             .bound_method => |bm| {
@@ -2751,6 +2973,13 @@ pub const Interpreter = struct {
             },
             .builtin => |b| {
                 return b.func(self.allocator, b.extra, args, kwargs);
+            },
+            .c_func => |cf| {
+                return self.callCFunc(cf, args);
+            },
+            .c_type => {
+                if (args.len > 0) return args[0];
+                return Value.makeInt(0);
             },
             .function => |f| {
                 if (f.jit_entry) |entry| {

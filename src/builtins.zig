@@ -940,6 +940,90 @@ pub fn makeConcurrentFuturesModule(allocator: Allocator) !Value {
     return Value{ .module = mod };
 }
 
+// Module: ctypes
+pub fn makeCtypesModule(allocator: Allocator) !Value {
+    const mod = try PyModule.init(allocator, "ctypes");
+
+    // CDLL constructor
+    const cdll_ctor = struct {
+        fn call(a: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+            if (args.len < 1) return error.TypeError;
+            const path_str = try args[0].str(a);
+            const dyn_lib = std.DynLib.open(path_str) catch {
+                return error.OSError;
+            };
+            const c_dll = try value_mod.PyCDll.init(a, path_str, dyn_lib);
+            return Value{ .c_dll = c_dll };
+        }
+    }.call;
+    const b_cdll = try allocator.create(PyBuiltin);
+    b_cdll.* = .{ .name = "CDLL", .func = cdll_ctor };
+    try mod.attributes.put("CDLL", Value{ .builtin = b_cdll });
+
+    // cdll accessor (with LoadLibrary method)
+    const cdll_obj = try PyModule.init(allocator, "cdll");
+    const load_lib = struct {
+        fn call(a: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+            if (args.len < 1) return error.TypeError;
+            const path_str = try args[0].str(a);
+            const dyn_lib = std.DynLib.open(path_str) catch {
+                return error.OSError;
+            };
+            const c_dll = try value_mod.PyCDll.init(a, path_str, dyn_lib);
+            return Value{ .c_dll = c_dll };
+        }
+    }.call;
+    const b_load = try allocator.create(PyBuiltin);
+    b_load.* = .{ .name = "LoadLibrary", .func = load_lib };
+    try cdll_obj.attributes.put("LoadLibrary", Value{ .builtin = b_load });
+    try mod.attributes.put("cdll", Value{ .module = cdll_obj });
+
+    // C types
+    try mod.attributes.put("c_void", Value{ .c_type = .c_void });
+    try mod.attributes.put("c_bool", Value{ .c_type = .c_bool });
+    try mod.attributes.put("c_byte", Value{ .c_type = .c_byte });
+    try mod.attributes.put("c_char", Value{ .c_type = .c_char });
+    try mod.attributes.put("c_short", Value{ .c_type = .c_short });
+    try mod.attributes.put("c_int", Value{ .c_type = .c_int });
+    try mod.attributes.put("c_int32", Value{ .c_type = .c_int });
+    try mod.attributes.put("c_long", Value{ .c_type = .c_long });
+    try mod.attributes.put("c_int64", Value{ .c_type = .c_long });
+    try mod.attributes.put("c_longlong", Value{ .c_type = .c_longlong });
+    try mod.attributes.put("c_size_t", Value{ .c_type = .c_size_t });
+    try mod.attributes.put("c_float", Value{ .c_type = .c_float });
+    try mod.attributes.put("c_double", Value{ .c_type = .c_double });
+    try mod.attributes.put("c_char_p", Value{ .c_type = .c_char_p });
+    try mod.attributes.put("c_void_p", Value{ .c_type = .c_void_p });
+
+    // sizeof(ctype)
+    const sizeof_fn = struct {
+        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+            if (args.len != 1) return error.TypeError;
+            if (args[0] == .c_type) {
+                return Value.makeInt(@intCast(args[0].c_type.size()));
+            }
+            return Value.makeInt(8);
+        }
+    }.call;
+    const b_sizeof = try allocator.create(PyBuiltin);
+    b_sizeof.* = .{ .name = "sizeof", .func = sizeof_fn };
+    try mod.attributes.put("sizeof", Value{ .builtin = b_sizeof });
+
+    // byref(val)
+    const byref_fn = struct {
+        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+            if (args.len != 1) return error.TypeError;
+            return args[0];
+        }
+    }.call;
+    const b_byref = try allocator.create(PyBuiltin);
+    b_byref.* = .{ .name = "byref", .func = byref_fn };
+    try mod.attributes.put("byref", Value{ .builtin = b_byref });
+    try mod.attributes.put("pointer", Value{ .builtin = b_byref });
+
+    return Value{ .module = mod };
+}
+
 pub fn populateBuiltins(allocator: Allocator, env: *Environment) !void {
     const defs = [_]struct { name: []const u8, func: value_mod.BuiltinFn }{
         .{ .name = "print", .func = builtinPrint },

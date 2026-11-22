@@ -458,6 +458,118 @@ pub const PyThreadPool = struct {
     }
 };
 
+pub const PyCType = enum {
+    c_void,
+    c_bool,
+    c_byte,
+    c_char,
+    c_short,
+    c_int,
+    c_long,
+    c_longlong,
+    c_size_t,
+    c_float,
+    c_double,
+    c_char_p,
+    c_void_p,
+
+    pub fn size(self: PyCType) usize {
+        return switch (self) {
+            .c_void => 0,
+            .c_bool, .c_byte, .c_char => 1,
+            .c_short => 2,
+            .c_int, .c_float => 4,
+            .c_long, .c_longlong, .c_size_t, .c_double, .c_char_p, .c_void_p => 8,
+        };
+    }
+
+    pub fn name(self: PyCType) []const u8 {
+        return switch (self) {
+            .c_void => "c_void",
+            .c_bool => "c_bool",
+            .c_byte => "c_byte",
+            .c_char => "c_char",
+            .c_short => "c_short",
+            .c_int => "c_int",
+            .c_long => "c_long",
+            .c_longlong => "c_longlong",
+            .c_size_t => "c_size_t",
+            .c_float => "c_float",
+            .c_double => "c_double",
+            .c_char_p => "c_char_p",
+            .c_void_p => "c_void_p",
+        };
+    }
+};
+
+pub const PyCDll = struct {
+    name: []const u8,
+    dyn_lib: std.DynLib,
+    symbols: std.StringHashMap(Value),
+    allocator: Allocator,
+
+    pub fn init(allocator: Allocator, name: []const u8, dyn_lib: std.DynLib) !*PyCDll {
+        const self = try allocator.create(PyCDll);
+        self.* = .{
+            .name = name,
+            .dyn_lib = dyn_lib,
+            .symbols = std.StringHashMap(Value).init(allocator),
+            .allocator = allocator,
+        };
+        return self;
+    }
+
+    pub fn lookupSymbol(self: *PyCDll, symbol_name: []const u8) ?Value {
+        if (self.symbols.get(symbol_name)) |sym| return sym;
+
+        const name_z = self.allocator.allocSentinel(u8, symbol_name.len, 0) catch return null;
+        defer self.allocator.free(name_z);
+        @memcpy(name_z, symbol_name);
+
+        var addr: ?usize = null;
+        if (self.dyn_lib.lookup(*const fn () callconv(.c) void, name_z)) |f| {
+            addr = @intFromPtr(f);
+        } else if (@hasDecl(@TypeOf(self.dyn_lib.inner), "lookupAddress")) {
+            addr = self.dyn_lib.inner.lookupAddress("", symbol_name);
+        }
+
+        if (addr == null) return null;
+
+        const c_func = PyCFunc.init(self.allocator, symbol_name, addr.?) catch return null;
+        const val = Value{ .c_func = c_func };
+        self.symbols.put(symbol_name, val) catch {};
+        return val;
+    }
+
+    pub fn close(self: *PyCDll) void {
+        self.dyn_lib.close();
+    }
+};
+
+pub const PyCFunc = struct {
+    name: []const u8,
+    addr: usize,
+    restype: PyCType = .c_int,
+    argtypes: std.ArrayList(PyCType),
+    is_c_extension: bool = false,
+    ml_flags: c_int = 0,
+    allocator: Allocator,
+
+    pub fn init(allocator: Allocator, name: []const u8, addr: usize) !*PyCFunc {
+        const self = try allocator.create(PyCFunc);
+        self.* = .{
+            .name = name,
+            .addr = addr,
+            .restype = .c_int,
+            .argtypes = .empty,
+            .is_c_extension = false,
+            .ml_flags = 0,
+            .allocator = allocator,
+        };
+        return self;
+    }
+};
+
 pub const PyIterator = struct {
     kind: union(enum) {
         range: struct { current: i64, stop: i64, step: i64 },
@@ -678,6 +790,9 @@ pub const Value = union(enum) {
     event: *PyEvent,
     future: *PyFuture,
     thread_pool: *PyThreadPool,
+    c_dll: *PyCDll,
+    c_func: *PyCFunc,
+    c_type: PyCType,
     return_flow,
     break_flow,
     continue_flow,
@@ -717,7 +832,7 @@ pub const Value = union(enum) {
             .dict => |d| d.entries.items.len > 0,
             .set => |s| s.items.items.len > 0,
             .range => |r| r.length() > 0,
-            .function, .builtin, .class, .instance, .bound_method, .module, .iterator, .generator, .coroutine, .thread, .lock, .semaphore, .event, .future, .thread_pool => true,
+            .function, .builtin, .class, .instance, .bound_method, .module, .iterator, .generator, .coroutine, .thread, .lock, .semaphore, .event, .future, .thread_pool, .c_dll, .c_func, .c_type => true,
             .return_flow, .break_flow, .continue_flow => false,
         };
     }
@@ -749,6 +864,9 @@ pub const Value = union(enum) {
             .event => "Event",
             .future => "Future",
             .thread_pool => "ThreadPoolExecutor",
+            .c_dll => "CDLL",
+            .c_func => "CFunction",
+            .c_type => "PyCSimpleType",
             .return_flow => "return",
             .break_flow => "break",
             .continue_flow => "continue",
@@ -873,6 +991,18 @@ pub const Value = union(enum) {
                 if (other != .thread_pool) return false;
                 return p == other.thread_pool;
             },
+            .c_dll => |d| {
+                if (other != .c_dll) return false;
+                return d == other.c_dll;
+            },
+            .c_func => |cf| {
+                if (other != .c_func) return false;
+                return cf == other.c_func;
+            },
+            .c_type => |ct| {
+                if (other != .c_type) return false;
+                return ct == other.c_type;
+            },
             else => return false,
         }
     }
@@ -961,6 +1091,9 @@ pub const Value = union(enum) {
             .event => |e| return std.fmt.allocPrint(allocator, "<threading.Event object at 0x{x} is_set={s}>", .{ @intFromPtr(e), if (e.isSet()) "True" else "False" }),
             .future => |f| return std.fmt.allocPrint(allocator, "<Future at 0x{x} state={s}>", .{ @intFromPtr(f), if (f.event.isSet()) "finished" else "pending" }),
             .thread_pool => |p| return std.fmt.allocPrint(allocator, "<ThreadPoolExecutor max_workers={d}>", .{p.max_workers}),
+            .c_dll => |d| return std.fmt.allocPrint(allocator, "<CDLL '{s}', handle 0x{x}>", .{ d.name, @intFromPtr(d) }),
+            .c_func => |cf| return std.fmt.allocPrint(allocator, "<_FuncPtr '{s}'>", .{cf.name}),
+            .c_type => |ct| return std.fmt.allocPrint(allocator, "<class 'ctypes.{s}'>", .{ct.name()}),
             .return_flow => return "return",
             .break_flow => return "break",
             .continue_flow => return "continue",

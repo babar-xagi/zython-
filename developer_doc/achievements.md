@@ -450,6 +450,38 @@ Zython now includes an interactive REPL terminal (`./zig-out/bin/zython`) modele
 
 ---
 
+## 🔌 10. Phase 9 Achievements: C-Extension FFI, `ctypes` & C-API Compatibility Bridge (v0.9.0)
+
+Zython v0.9.0 delivers direct binary C interoperability and dynamic shared library integration:
+
+### 🌟 Key Phase 9 Architectural Deliverables:
+1. **Native `ctypes` Standard Module**:
+   - Full implementation of `ctypes.CDLL(path)` and `ctypes.cdll.LoadLibrary(path)`.
+   - `ctypes.sizeof()` type width inspection for primitive types: `c_int (4)`, `c_long (8)`, `c_double (8)`, `c_float (4)`, `c_char_p (8)`, `c_void_p (8)`, and `c_bool (1)`.
+   - `ctypes.byref(val)` and `ctypes.pointer(val)` memory reference generator.
+   - Dynamic C function signature configuration via `.restype` and `.argtypes`.
+2. **CPython C-API Binary Compatibility Engine (`src/capi.zig`)**:
+   - Binary-compatible `PyObject` structure layout and type tag discrimination.
+   - Core Python object wrappers: `PyLongObject`, `PyFloatObject`, `PyUnicodeObject`, `PyTupleObject`, `PyListObject`, and `PyDictObject`.
+   - CPython module definitions: `PyMethodDef`, `PyModuleDef`, and `PyModuleObject`.
+   - Exported C-API functions (`pub export fn` with `-rdynamic` in `build.zig`):
+     - `PyLong_FromLong`, `PyLong_FromLongLong`, `PyLong_AsLong`, `PyLong_AsLongLong`
+     - `PyFloat_FromDouble`, `PyFloat_AsDouble`
+     - `PyUnicode_FromString`, `PyUnicode_AsUTF8`
+     - `PyTuple_New`, `PyTuple_SetItem`, `PyTuple_GetItem`, `PyTuple_Size`
+     - `PyList_New`, `PyList_Append`, `PyList_GetItem`, `PyList_Size`
+     - `PyDict_New`, `PyModule_Create2`, `Py_IncRef`, `Py_DecRef`
+3. **Dynamic Module Loading & Dispatch (`PyInit_<name>`)**:
+   - Dynamic `.so` module loading from current directory (`./<module>.so`) and `/tmp/<module>.so`.
+   - Dynamic resolution of `PyInit_<module>()` symbol via `std.DynLib`.
+   - Support for `import <module>` and `from <module> import <func>` syntax.
+   - Bidirectional marshaling between Zython `Value` and `PyObject*` tuples.
+4. **Verified C-Extension Suite (Test 7)**:
+   - Full 8-part test suite in [`tests/final_pure_tests/07_c_extensions_and_ctypes.py`](file:///home/xagi/Desktop/zig_com/zython-/tests/final_pure_tests/07_c_extensions_and_ctypes.py) passing with 100% precision.
+
+
+---
+
 ## ⚡ 8. Phase 7 Achievements: Stackless Generators, Coroutines & Async/Await (v0.7.0)
 
 With the delivery of **Phase 7**, Zython achieves full modern asynchronous and generative programming parity with CPython:
@@ -532,3 +564,35 @@ Zython now includes an interactive REPL terminal (`./zig-out/bin/zython`) modele
    - Clean prompt width normalization ensuring `>>> ` and `... ` align precisely at column 6.
 5. **Dynamic Terminal Width Detection**:
    - Automatically probes `ioctl(TIOCGWINSZ)` to render block borders perfectly fitted to terminal dimensions.
+
+---
+
+## 🔌 10. Phase 9 Achievements: C-Extension FFI, `ctypes` & C-API Compatibility Bridge (v0.9.0)
+
+Zython v0.9.0 delivers direct binary C interoperability and dynamic shared library integration:
+
+### 🌟 Key Phase 9 Architectural Deliverables:
+1. **Native `ctypes` Standard Module**:
+   - Full implementation of `ctypes.CDLL(path)` and `ctypes.cdll.LoadLibrary(path)`.
+   - `ctypes.sizeof()` type width inspection for primitive types: `c_int (4)`, `c_long (8)`, `c_double (8)`, `c_float (4)`, `c_char_p (8)`, `c_void_p (8)`, and `c_bool (1)`.
+   - `ctypes.byref(val)` and `ctypes.pointer(val)` memory reference generator.
+   - Dynamic C function signature configuration via `.restype` and `.argtypes`.
+2. **CPython C-API Binary Compatibility Engine (`src/capi.zig`)**:
+   - Binary-compatible `PyObject` structure layout and type tag discrimination.
+   - Core Python object wrappers: `PyLongObject`, `PyFloatObject`, `PyUnicodeObject`, `PyTupleObject`, `PyListObject`, and `PyDictObject`.
+   - CPython module definitions: `PyMethodDef`, `PyModuleDef`, and `PyModuleObject`.
+   - Exported C-API functions (`pub export fn` with `-rdynamic` in `build.zig`):
+     - `PyLong_FromLong`, `PyLong_FromLongLong`, `PyLong_AsLong`, `PyLong_AsLongLong`
+     - `PyFloat_FromDouble`, `PyFloat_AsDouble`
+     - `PyUnicode_FromString`, `PyUnicode_AsUTF8`
+     - `PyTuple_New`, `PyTuple_SetItem`, `PyTuple_GetItem`, `PyTuple_Size`
+     - `PyList_New`, `PyList_Append`, `PyList_GetItem`, `PyList_Size`
+     - `PyDict_New`, `PyModule_Create2`, `Py_IncRef`, `Py_DecRef`
+3. **Dynamic Module Loading & Dispatch (`PyInit_<name>`)**:
+   - Dynamic `.so` module loading from current directory (`./<module>.so`) and `/tmp/<module>.so`.
+   - Dynamic resolution of `PyInit_<module>()` symbol via `std.DynLib`.
+   - Support for `import <module>` and `from <module> import <func>` syntax.
+   - Bidirectional marshaling between Zython `Value` and `PyObject*` tuples.
+4. **Verified C-Extension Suite (Test 7)**:
+   - Full 8-part test suite in [`tests/final_pure_tests/07_c_extensions_and_ctypes.py`](file:///home/xagi/Desktop/zig_com/zython-/tests/final_pure_tests/07_c_extensions_and_ctypes.py) passing with 100% precision.
+

@@ -15,8 +15,9 @@ Welcome to the internal engineering documentation and architectural reference fo
 | [**5. Phase 6 Architecture (v0.6.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/05_phase6_bignums_decorators_and_context_managers_v0.6.0.md) | Bignums, Context Managers & Decorators | • Multi-limb arbitrary precision (`PyBigInt`)<br>• `with EXPR as VAR:` context managers<br>• `@decorator` syntax wrapping<br>• 100% parity across all edge cases |
 | [**6. Phase 7 Architecture (v0.7.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/06_phase7_generators_coroutines_and_async_v0.7.0.md) | Stackless Generators & Async/Await | • Stackless `PyGenerator` & `yield`<br>• Iteration protocol (`next()`, `__iter__()`)<br>• `async def` & `await` expressions (`PyCoroutine`)<br>• `asyncio.run()` event loop scheduler |
 | [**7. Phase 8 Architecture (v0.8.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/07_phase8_multithreading_and_threadpool_v0.8.0.md) | Native Multi-Threading & Concurrency | • Preemptive OS threads (`std.Thread.spawn`)<br>• Lock, RLock, Semaphore, Event primitives<br>• `ThreadPoolExecutor` & `as_completed`<br>• GIL-free multi-core parallel execution |
-| [**8. Master Achievements & Bug Audit**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/achievements.md) | Comprehensive Audit & Fix Records | • BUG-01 through BUG-08 root causes & fixes<br>• Phase 4 Quickening & PIC achievements<br>• Phase 5 JIT compiler achievements & 55.2× speedup<br>• Phase 6 Bignum, context manager & decorator audit<br>• Phase 7 Generator & coroutine audit<br>• Phase 8 Multi-threading & ThreadPool audit |
-| [**9. Master Roadmap & Completion Matrix**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/roadmap.md) | Execution Plan & Milestones | • Phases 1 through 8 marked 100% COMPLETE<br>• Phase 9 C Extension / PyO3 specification<br>• Full language feature compatibility matrix |
+| [**8. Phase 9 Architecture (v0.9.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/08_phase9_c_extensions_and_ctypes_v0.9.0.md) | C-Extension FFI & ctypes Bridge | • Native `ctypes` (`CDLL`, `cdll`, `sizeof`, `byref`, `c_*`)<br>• CPython C-API layer (`src/capi.zig`)<br>• Dynamic `.so` module loading & `PyInit_<name>`<br>• Bidirectional `Value` ↔ `PyObject*` conversion |
+| [**9. Master Achievements & Bug Audit**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/achievements.md) | Comprehensive Audit & Fix Records | • BUG-01 through BUG-08 root causes & fixes<br>• Phase 4 Quickening & PIC achievements<br>• Phase 5 JIT compiler achievements & 55.2× speedup<br>• Phase 6 Bignum, context manager & decorator audit<br>• Phase 7 Generator & coroutine audit<br>• Phase 8 Multi-threading & ThreadPool audit<br>• Phase 9 C-Extension FFI & ctypes audit |
+| [**10. Master Roadmap & Completion Matrix**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/roadmap.md) | Execution Plan & Milestones | • Phases 1 through 9 marked 100% COMPLETE<br>• Phase 10 General Availability specification<br>• Full language feature compatibility matrix |
 
 ---
 
@@ -82,6 +83,13 @@ flowchart LR
         C8 --> D8["Lock / RLock / Semaphore"]
     end
 
+    subgraph Phase9 ["v0.9.0: C-Extension FFI & ctypes (✅ Released)"]
+        A9["Dynamic Interop"] --> B9["ctypes CDLL & sizeof"]
+        B9 --> C9["src/capi.zig CPython ABI"]
+        C9 --> D9["Dynamic .so PyInit Loading"]
+        D9 --> E9["Value <-> PyObject* Bridge"]
+    end
+
     Phase1 --> Phase2
     Phase2 --> Phase3
     Phase3 --> Phase4
@@ -89,6 +97,7 @@ flowchart LR
     Phase5 --> Phase6
     Phase6 --> Phase7
     Phase7 --> Phase8
+    Phase8 --> Phase9
 ```
 
 ---

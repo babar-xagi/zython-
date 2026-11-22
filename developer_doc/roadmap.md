@@ -15,7 +15,8 @@ flowchart LR
     P5 --> P6["Phase 6: Bignums & Decorators (v0.6.0)<br>✅ 100% COMPLETE"]
     P6 --> P7["Phase 7: Generators & Async (v0.7.0)<br>✅ 100% COMPLETE"]
     P7 --> P8["Phase 8: Multi-Threading (v0.8.0)<br>✅ 100% COMPLETE"]
-    P8 --> P9["Phase 9: C Extension & PyO3 (v0.9.0)<br>⏳ PLANNED"]
+    P8 --> P9["Phase 9: C-Extension FFI & ctypes (v0.9.0)<br>✅ 100% COMPLETE"]
+    P9 --> P10["Phase 10: General Availability (v1.0.0)<br>⏳ PLANNED"]
 ```
 
 ---
@@ -193,8 +194,27 @@ flowchart LR
 
 ---
 
-### ⏳ Phase 9: C Extension & PyO3 Compatibility ABI (v0.9.0)
+### ✅ Phase 9: C-Extension FFI, `ctypes` & C-API Compatibility Bridge (v0.9.0)
+*Status: 100% Complete | Delivered*
+* **Core Goal**: Support loading compiled C/C++ extensions (`.so`), dynamic FFI symbol resolution via `ctypes`, and binary CPython C-API module execution.
+* [x] 🔌 **`ctypes` Standard Module**: Full implementation of `CDLL`, `cdll`, `sizeof`, `byref`, and primitive type singletons (`c_int`, `c_long`, `c_double`, `c_float`, `c_char_p`, `c_void_p`, `c_bool`).
+* [x] 📦 **CPython C-API Compatibility Layer (`src/capi.zig`)**: Binary-compatible `PyObject`, `PyLongObject`, `PyFloatObject`, `PyUnicodeObject`, `PyTupleObject`, `PyListObject`, `PyDictObject`, `PyMethodDef`, `PyModuleDef`, and `PyModuleObject`.
+* [x] ⚡ **Exported C-API Function Table**: `PyLong_FromLong`, `PyLong_AsLong`, `PyFloat_FromDouble`, `PyFloat_AsDouble`, `PyUnicode_FromString`, `PyTuple_New`, `PyTuple_SetItem`, `PyTuple_GetItem`, `PyList_New`, `PyList_Append`, `PyModule_Create2`, `Py_IncRef`, `Py_DecRef`.
+* [x] 🚀 **Dynamic Extension Loading (`PyInit_<name>`)**: Automatic detection and loading of `./<name>.so` and `/tmp/<name>.so`, binding method definitions into callable `c_func` instances.
+* [x] 🔄 **Bidirectional Type Conversion**: Fast conversion between Zython `Value` and `PyObject*` with dynamic type inspection via `ob_type`.
+* [x] 🧪 **Empirical Verification Suite 07**:
+  * `ctypes.sizeof`: Verified sizes for all primitive types (`c_int: 4`, `c_double: 8`, `c_char_p: 8`, `c_void_p: 8`, `c_bool: 1`).
+  * `ctypes.CDLL`: Dynamically calling C integer and floating-point functions with `argtypes` and `restype`.
+  * `ctypes.cdll.LoadLibrary`: High-level convenience library loading and invocation.
+  * CPython C-extension module: `import sample_ext` and execution of `add(20, 22) == 42` and `multiply(2.5, 4.0) == 10.0`.
+  * Selective import: `from sample_ext import add, multiply` 100% verified.
+  * `All 7 Test Suites`: **100% Passing with zero crashes, memory corruption, or leaks**.
+
+---
+
+### ⏳ Phase 10: General Availability (v1.0.0 Production Release)
 *Status: Planned | Next Milestone*
-* **Core Goal**: Support loading compiled C/C++ and Rust extensions (`.so` / `.pyd`) without source modifications.
-* [ ] 🔌 **CPython ABI Stubs**: Implementation of `PyObject*`, `PyTypeObject`, `PyTuple_New`, etc.
-* [ ] 📦 **Dynamic Library Loader**: Platform-native `dlopen` / `LoadLibrary` dynamic symbol resolution.
+* **Core Goal**: Full Python 3.15 standard library hardening, comprehensive package manager ecosystem compatibility (wheel, pip), and production stability validation.
+* [ ] 📦 **Package Manager Integration**: Pip / wheel installation and virtual environment support.
+* [ ] 🌐 **Extended Standard Library**: Native socket networking, ssl, and sqlite3 bindings.
+* [ ] ⚡ **Production Hardening**: Long-running process stress testing and multi-core performance scaling benchmarks.

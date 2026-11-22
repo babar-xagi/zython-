@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Zython Logo Banner](https://img.shields.io/badge/Zython-Python%20in%20Zig-orange?style=for-the-badge&logo=zig)
-![Version](https://img.shields.io/badge/Version-v0.8.0-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v0.9.0-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 **The definitive operational manual for installing, building, utilizing, and extending Zython.**
@@ -504,6 +504,26 @@ result = asyncio.run(compute())
 print("Async computation result:", result)
 ```
 
+#### 7. `ctypes` Module & Dynamic C-Extension FFI
+```python
+import ctypes
+
+# 1. Type Inspection
+print("sizeof(c_int):   ", ctypes.sizeof(ctypes.c_int))
+print("sizeof(c_double):", ctypes.sizeof(ctypes.c_double))
+
+# 2. Dynamic Library Loading (CDLL)
+lib = ctypes.CDLL("./libsample.so")
+lib.add_numbers.restype = ctypes.c_int
+lib.add_numbers.argtypes = [ctypes.c_int, ctypes.c_int]
+print("lib.add_numbers(15, 27):", lib.add_numbers(15, 27))
+
+# 3. Direct CPython C-Extension Import (.so)
+import sample_ext
+print("sample_ext.add(20, 22):", sample_ext.add(20, 22))
+print("sample_ext.multiply(2.5, 4.0):", sample_ext.multiply(2.5, 4.0))
+```
+
 ---
 
 ## 🧪 7. Running Tests & Benchmarks
@@ -537,6 +557,7 @@ Validates language compatibility across arithmetic, control flow, functions, OOP
 ./zig-out/bin/zython tests/final_pure_tests/04_loop_mechanics_ground_reality.py
 ./zig-out/bin/zython tests/final_pure_tests/05_edge_cases_and_issues.py
 ./zig-out/bin/zython tests/final_pure_tests/06_multithreading_and_concurrency.py
+./zig-out/bin/zython tests/final_pure_tests/07_c_extensions_and_ctypes.py
 ```
 *All tests should complete with exit code 0.*
 

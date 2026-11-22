@@ -189,7 +189,7 @@ pub const Repl = struct {
 
     pub fn run(self: *Repl) !void {
         defer self.deinit();
-        writeStdout("\n" ++ TermColor.amber ++ TermColor.bold ++ "⚡ Zython 0.8.0 " ++ TermColor.reset ++ TermColor.dim ++ "[Python 3.15 Engine • Zig 0.17.1]\n" ++ TermColor.reset);
+        writeStdout("\n" ++ TermColor.amber ++ TermColor.bold ++ "⚡ Zython 0.9.0 " ++ TermColor.reset ++ TermColor.dim ++ "[Python 3.15 Engine • Zig 0.17.1]\n" ++ TermColor.reset);
         writeStdout(TermColor.dim ++ "Interactive Block Terminal • Type 'exit()' to exit\n\n" ++ TermColor.reset);
 
         var reader = LineReader{};
