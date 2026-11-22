@@ -748,6 +748,198 @@ pub fn makeAsyncioModule(allocator: Allocator) !Value {
     return Value{ .module = mod };
 }
 
+// Module: threading
+pub fn makeThreadingModule(allocator: Allocator) !Value {
+    const mod = try PyModule.init(allocator, "threading");
+
+    const thread_ctor = struct {
+        fn call(a: Allocator, _: ?*anyopaque, args: []const Value, kwargs: []const DictEntry) anyerror!Value {
+            var target: Value = .none;
+            var thread_args: []const Value = &.{};
+            var name: []const u8 = "Thread";
+            var daemon: bool = false;
+
+            for (kwargs) |kw| {
+                if (kw.key == .string) {
+                    if (std.mem.eql(u8, kw.key.string.bytes, "target")) {
+                        target = kw.val;
+                    } else if (std.mem.eql(u8, kw.key.string.bytes, "args")) {
+                        if (kw.val == .tuple) {
+                            thread_args = kw.val.tuple.items;
+                        } else if (kw.val == .list) {
+                            thread_args = kw.val.list.items.items;
+                        }
+                    } else if (std.mem.eql(u8, kw.key.string.bytes, "name") and kw.val == .string) {
+                        name = kw.val.string.bytes;
+                    } else if (std.mem.eql(u8, kw.key.string.bytes, "daemon") and kw.val == .bool) {
+                        daemon = kw.val.bool;
+                    }
+                }
+            }
+
+            if (target == .none and args.len > 0) {
+                target = args[0];
+            }
+            if (thread_args.len == 0 and args.len > 1) {
+                if (args[1] == .tuple) {
+                    thread_args = args[1].tuple.items;
+                } else if (args[1] == .list) {
+                    thread_args = args[1].list.items.items;
+                }
+            }
+
+            var th = try value_mod.PyThread.init(a, name, 1, target, thread_args);
+            th.daemon = daemon;
+            return Value{ .thread = th };
+        }
+    }.call;
+    const b_thread = try allocator.create(PyBuiltin);
+    b_thread.* = .{ .name = "Thread", .func = thread_ctor };
+    try mod.attributes.put("Thread", Value{ .builtin = b_thread });
+
+    const lock_ctor = struct {
+        fn call(a: Allocator, _: ?*anyopaque, _: []const Value, _: []const DictEntry) anyerror!Value {
+            const l = try value_mod.PyLock.init(a, false);
+            return Value{ .lock = l };
+        }
+    }.call;
+    const b_lock = try allocator.create(PyBuiltin);
+    b_lock.* = .{ .name = "Lock", .func = lock_ctor };
+    try mod.attributes.put("Lock", Value{ .builtin = b_lock });
+
+    const rlock_ctor = struct {
+        fn call(a: Allocator, _: ?*anyopaque, _: []const Value, _: []const DictEntry) anyerror!Value {
+            const l = try value_mod.PyLock.init(a, true);
+            return Value{ .lock = l };
+        }
+    }.call;
+    const b_rlock = try allocator.create(PyBuiltin);
+    b_rlock.* = .{ .name = "RLock", .func = rlock_ctor };
+    try mod.attributes.put("RLock", Value{ .builtin = b_rlock });
+
+    const sem_ctor = struct {
+        fn call(a: Allocator, _: ?*anyopaque, args: []const Value, kwargs: []const DictEntry) anyerror!Value {
+            var val: i64 = 1;
+            if (args.len > 0 and args[0] == .int) {
+                val = args[0].int;
+            }
+            for (kwargs) |kw| {
+                if (kw.key == .string and std.mem.eql(u8, kw.key.string.bytes, "value") and kw.val == .int) {
+                    val = kw.val.int;
+                }
+            }
+            const s = try value_mod.PySemaphore.init(a, val);
+            return Value{ .semaphore = s };
+        }
+    }.call;
+    const b_sem = try allocator.create(PyBuiltin);
+    b_sem.* = .{ .name = "Semaphore", .func = sem_ctor };
+    try mod.attributes.put("Semaphore", Value{ .builtin = b_sem });
+
+    const event_ctor = struct {
+        fn call(a: Allocator, _: ?*anyopaque, _: []const Value, _: []const DictEntry) anyerror!Value {
+            const ev = try value_mod.PyEvent.init(a);
+            return Value{ .event = ev };
+        }
+    }.call;
+    const b_event = try allocator.create(PyBuiltin);
+    b_event.* = .{ .name = "Event", .func = event_ctor };
+    try mod.attributes.put("Event", Value{ .builtin = b_event });
+
+    const cur_thread = struct {
+        fn call(a: Allocator, _: ?*anyopaque, _: []const Value, _: []const DictEntry) anyerror!Value {
+            const main_th = try value_mod.PyThread.init(a, "MainThread", 0, .none, &.{});
+            main_th.is_alive = true;
+            return Value{ .thread = main_th };
+        }
+    }.call;
+    const b_cur = try allocator.create(PyBuiltin);
+    b_cur.* = .{ .name = "current_thread", .func = cur_thread };
+    try mod.attributes.put("current_thread", Value{ .builtin = b_cur });
+
+    const active_cnt = struct {
+        fn call(_: Allocator, _: ?*anyopaque, _: []const Value, _: []const DictEntry) anyerror!Value {
+            return Value.makeInt(1);
+        }
+    }.call;
+    const b_cnt = try allocator.create(PyBuiltin);
+    b_cnt.* = .{ .name = "active_count", .func = active_cnt };
+    try mod.attributes.put("active_count", Value{ .builtin = b_cnt });
+
+    const get_ident_fn = struct {
+        fn call(_: Allocator, _: ?*anyopaque, _: []const Value, _: []const DictEntry) anyerror!Value {
+            return Value.makeInt(@intCast(std.Thread.getCurrentId()));
+        }
+    }.call;
+    const b_ident = try allocator.create(PyBuiltin);
+    b_ident.* = .{ .name = "get_ident", .func = get_ident_fn };
+    try mod.attributes.put("get_ident", Value{ .builtin = b_ident });
+
+    return Value{ .module = mod };
+}
+
+// Module: concurrent.futures
+pub fn makeConcurrentFuturesModule(allocator: Allocator) !Value {
+    const mod = try PyModule.init(allocator, "concurrent.futures");
+
+    const pool_ctor = struct {
+        fn call(a: Allocator, _: ?*anyopaque, args: []const Value, kwargs: []const DictEntry) anyerror!Value {
+            var max_w: usize = 4;
+            if (args.len > 0 and args[0] == .int) {
+                max_w = @intCast(@max(1, args[0].int));
+            }
+            for (kwargs) |kw| {
+                if (kw.key == .string and std.mem.eql(u8, kw.key.string.bytes, "max_workers")) {
+                    if (kw.val == .int) {
+                        max_w = @intCast(@max(1, kw.val.int));
+                    }
+                }
+            }
+            const p = try value_mod.PyThreadPool.init(a, max_w);
+            return Value{ .thread_pool = p };
+        }
+    }.call;
+
+    const b_pool = try allocator.create(PyBuiltin);
+    b_pool.* = .{ .name = "ThreadPoolExecutor", .func = pool_ctor };
+    try mod.attributes.put("ThreadPoolExecutor", Value{ .builtin = b_pool });
+
+    const as_completed_fn = struct {
+        fn call(a: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+            if (args.len < 1) return error.TypeError;
+            var fut_list: std.ArrayList(Value) = .empty;
+            switch (args[0]) {
+                .list => |l| try fut_list.appendSlice(a, l.items.items),
+                .tuple => |t| try fut_list.appendSlice(a, t.items),
+                else => return error.TypeError,
+            }
+            const res = try value_mod.PyList.init(a);
+            for (fut_list.items) |item| {
+                if (item == .future) {
+                    _ = item.future.event.wait();
+                    try res.items.append(a, item);
+                }
+            }
+            return Value{ .list = res };
+        }
+    }.call;
+    const b_ac = try allocator.create(PyBuiltin);
+    b_ac.* = .{ .name = "as_completed", .func = as_completed_fn };
+    try mod.attributes.put("as_completed", Value{ .builtin = b_ac });
+
+    const fut_ctor = struct {
+        fn call(a: Allocator, _: ?*anyopaque, _: []const Value, _: []const DictEntry) anyerror!Value {
+            const f = try value_mod.PyFuture.init(a);
+            return Value{ .future = f };
+        }
+    }.call;
+    const b_fut = try allocator.create(PyBuiltin);
+    b_fut.* = .{ .name = "Future", .func = fut_ctor };
+    try mod.attributes.put("Future", Value{ .builtin = b_fut });
+
+    return Value{ .module = mod };
+}
+
 pub fn populateBuiltins(allocator: Allocator, env: *Environment) !void {
     const defs = [_]struct { name: []const u8, func: value_mod.BuiltinFn }{
         .{ .name = "print", .func = builtinPrint },

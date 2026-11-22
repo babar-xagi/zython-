@@ -137,8 +137,18 @@ async def async_main():
 res_async = asyncio.run(async_main())
 print("13. Async / Await Coroutines: asyncio.run(async_main()) =", res_async)
 
-# 14. Remaining Roadmap Scope (Future Releases)
-print("14. Future Scope Roadmap:")
-print("   - Native Multi-Threading & ThreadPoolExecutor")
-print("   - C Extension & PyO3 Compatibility ABI")
+# 14. Native Multi-Threading & ThreadPoolExecutor (Phase 8 Complete)
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
+def add_five(val):
+    return val + 5
+
+with ThreadPoolExecutor(max_workers=2) as pool:
+    fut = pool.submit(add_five, 10)
+    print("14. Native Multi-Threading & ThreadPoolExecutor: pool.submit(add_five, 10) =", fut.result())
+
+# 15. Remaining Roadmap Scope (Future Releases)
+print("15. Future Scope Roadmap:")
+print("   - Phase 9: C Extension & PyO3 Compatibility ABI")
 print("Ground reality edge-cases evaluation complete.")

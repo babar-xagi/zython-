@@ -484,6 +484,31 @@ With the delivery of **Phase 7**, Zython achieves full modern asynchronous and g
 
 ---
 
+## ⚡ 10. Phase 8 Achievements: Native Multi-Threading & ThreadPoolExecutor (v0.8.0)
+
+Phase 8 elevates Zython into a true preemptive parallel execution engine with zero Global Interpreter Lock (GIL) bottlenecks:
+
+### 🌟 Key Phase 8 Deliverables:
+1. **OS-Level Threading Engine (`threading.Thread`)**:
+   - Spawns OS worker threads directly via `std.Thread.spawn` with atomic status updates.
+   - Clean thread lifecycle management (`start()`, `join()`, `is_alive()`, `name`, `ident`, `daemon`).
+2. **Atomic Synchronization Suite (`Lock`, `RLock`, `Semaphore`, `Event`)**:
+   - `threading.Lock`: Mutual exclusion with context manager protocol (`with lock:`).
+   - `threading.RLock`: Thread-ownership reentrancy tracking via `std.Thread.getCurrentId()`.
+   - `threading.Semaphore`: Atomic capacity counter controlling concurrent resource access.
+   - `threading.Event`: Inter-thread state signaling (`set()`, `clear()`, `is_set()`, `wait()`).
+3. **High-Throughput ThreadPoolExecutor (`concurrent.futures`)**:
+   - `ThreadPoolExecutor.submit()`: Returns asynchronous `PyFuture` handles.
+   - `ThreadPoolExecutor.map()`: Fans out task execution across worker threads.
+   - `concurrent.futures.as_completed()`: Yields resolved futures as they finish.
+   - Context manager lifecycle (`with ThreadPoolExecutor(max_workers=4) as pool:`).
+4. **Scope Resolution Bug Fix for Global Mutex Updates**:
+   - Resolved global variable delegation in `assignTarget`, `evalExpr`, and `Environment.getSlotPtr` ensuring `global x` mutations inside threads update the root `global_env`.
+5. **Verified Multi-Threading Suite (Test 6)**:
+   - Full 8-part concurrency suite in [`tests/final_pure_tests/06_multithreading_and_concurrency.py`](file:///home/xagi/Desktop/zig_com/zython-/tests/final_pure_tests/06_multithreading_and_concurrency.py) passing with 100% clean exit codes.
+
+---
+
 ## ⚡ 9. Block-Based Interactive REPL Terminal (Jupyter Notebook & JetBrains New Terminal Design)
 
 Zython now includes an interactive REPL terminal (`./zig-out/bin/zython`) modeled after the block structure of **Jupyter Notebook cells** and the modern **JetBrains Terminal 2.0 block UI**:

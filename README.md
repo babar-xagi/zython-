@@ -4,14 +4,14 @@
 
 [![Zig](https://img.shields.io/badge/Zig-0.17.1-orange.svg?logo=zig)](https://ziglang.org/)
 [![Python](https://img.shields.io/badge/Python-3.15%20Compatibility-blue.svg?logo=python)](https://python.org/)
-[![Release](https://img.shields.io/badge/Release-v0.7.0%20(Phase%207)-brightgreen.svg)]()
+[![Release](https://img.shields.io/badge/Release-v0.8.0%20(Phase%208)-brightgreen.svg)]()
 [![Performance](https://img.shields.io/badge/Compute-39.2x--55.2x%20Faster%20than%20CPython-success.svg)]()
 [![Loops](https://img.shields.io/badge/Loops-1.46x%20--%202.12x%20Faster%20than%20CPython-success.svg)]()
 [![Memory](https://img.shields.io/badge/Peak%20RSS-3.5%20MB%20(67%25%20Less%20RAM)-blueviolet.svg)]()
 [![Build](https://img.shields.io/badge/Binary-Fully%20Static%20(0%20Deps)-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
-**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with Stackless Generators, Coroutines & Async/Await (`asyncio.run`), a Copy-and-Patch Native JIT Compiler, Multi-Limb Arbitrary-Precision Bignums, Context Managers, Syntactic Decorators, and an Adaptive Bytecode VM.**
+**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with Native Multi-Threading & ThreadPoolExecutor (`threading`, `concurrent.futures`), Stackless Generators, Coroutines & Async/Await (`asyncio.run`), a Copy-and-Patch Native JIT Compiler, Multi-Limb Arbitrary-Precision Bignums, Context Managers, Syntactic Decorators, and an Adaptive Bytecode VM.**
 
 [Overview](#-overview) •
 [Installation & User Guide](docs/user_guide.md) •
@@ -32,12 +32,13 @@
 
 ### 🎯 Why Zython?
 
-| Feature | ⚡ Zython 0.7.0 (Generators, JIT & Async) | 🐍 Standard CPython 3.14.4 |
+| Feature | ⚡ Zython 0.8.0 (Concurrency, JIT & Async) | 🐍 Standard CPython 3.14.4 |
 |---|:---:|:---:|
 | **Recursive Fibonacci (`fib(26)`)** | **0.00044 s** ⚡ | 0.01726 s (**Zython is 39.2× faster**) 🏆 |
 | **Insertion Sort (1,500 elements)** | **0.00237 s** ⚡ | 0.06231 s (**Zython is 26.3× faster**) ⚡ |
 | **Prime Sieve (15,000 items)** | **0.00076 s** ⚡ | 0.01180 s (**Zython is 15.5× faster**) ⚡ |
 | **Taylor Series ($e^{3.5}$, 30 terms)** | **< 1 µs** ⚡ | 20 µs (**Sub-microsecond FP**) |
+| **Native Multi-Threading & Pools** | **`threading`, `concurrent.futures` (GIL-Free)** 🚀 | GIL Bottlenecked (Global Interpreter Lock) |
 | **Stackless Generators (`yield`)** | **`val1=3, val2=2, val3=1`** ✅ | `val1=3, val2=2, val3=1` (100% Parity) |
 | **Async / Await (`asyncio.run`)** | **`56`** ✅ | `56` (100% Parity) |
 | **Arbitrary Precision (`2**64`)** | **`18446744073709551616`** ✅ | `18446744073709551616` (100% Parity) |
@@ -124,7 +125,7 @@
 > • **Zython 0.5.0**: Built with pure Zig 0.17.1 (`ReleaseFast`, statically linked, 0 dynamic dependencies).  
 > • **CPython 3.14.4**: Standard official Python 3.14.4 runtime (`[GCC 15.2.0]`).  
 > **Profiling Instrument**: GNU `/usr/bin/time -v` (Capturing kernel-level elapsed wall time, CPU time, and OS Peak Resident Set Size).  
-> **Test Suite**: [`tests/final_pure_tests/`](file:///c:/Users/DELL/Downloads/zython/tests/final_pure_tests/)
+> **Test Suite**: [`tests/final_pure_tests/`](file:///home/xagi/Desktop/zig_com/zython-/tests/final_pure_tests/)
 
 ### 🏆 Head-to-Head Scorecard
 
@@ -195,10 +196,12 @@ xychart-beta
 | **v0.3.0** | Phase 3: Bytecode Virtual Machine | Packed 32-bit linear bytecode, single-pass compiler, fixed stack VM, zero-alloc CallFrame windows, unboxed `PyIterator` | ✅ **Released** |
 | **v0.4.0** | Phase 4: Adaptive Specialization | In-place self-modifying bytecode (PEP 659 Quickening), superinstructions (`op_load_fast_0..3`), PIC, global cache | ✅ **Released** |
 | **v0.5.0** | Phase 5: Copy-and-Patch Native JIT | Binary stencils, executable memory arena (`mmap/PROT_EXEC`), direct machine code generation (**55.2× Speedup Achieved**) | ✅ **Released** |
-| **v0.6.0** | Phase 6: Bignums, Context Managers & Decorators | Multi-limb arbitrary-precision bignums (`PyBigInt`), `with` statements, `@decorator` syntax, 100% edge-case parity | ✅ **Released (Current)** |
-| **v0.7.0** | Phase 7: Coroutines & Async Engine | Stackless suspendable generator frames, `async`/`await` state machine, pure Zig event loop | ⏳ **Planned** |
+| **v0.6.0** | Phase 6: Bignums, Context Managers & Decorators | Multi-limb arbitrary-precision bignums (`PyBigInt`), `with` statements, `@decorator` syntax, 100% edge-case parity | ✅ **Released** |
+| **v0.7.0** | Phase 7: Coroutines & Async Engine | Stackless suspendable generator frames, `async`/`await` state machine, pure Zig event loop | ✅ **Released** |
+| **v0.8.0** | Phase 8: Multi-Threading & Concurrency | Native OS threads (`std.Thread`), `threading.Thread`, `Lock`, `RLock`, `Semaphore`, `Event`, `ThreadPoolExecutor` | ✅ **Released (Current)** |
+| **v0.9.0** | Phase 9: C-Extension FFI & Native Bridge | CPython C-API header compatibility layer, `ctypes`, shared object loading | ⏳ **Planned** |
 
-For the comprehensive technical roadmap and architectural documentation, see [`developer_doc/roadmap.md`](file:///c:/Users/DELL/Downloads/zython/developer_doc/roadmap.md).
+For the comprehensive technical roadmap and architectural documentation, see [`developer_doc/roadmap.md`](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/roadmap.md).
 
 ---
 
@@ -235,6 +238,8 @@ For the comprehensive technical roadmap and architectural documentation, see [`d
 ### 🔹 Built-in Functions & Modules
 - **Built-in Functions**: `print`, `len`, `range`, `type`, `int`, `float`, `str`, `repr`, `bool`, `list`, `tuple`, `dict`, `set`, `sum`, `min`, `max`, `abs`, `round`, `pow`, `ord`, `chr`, `callable`, `isinstance`, `enumerate`, `zip`, `reversed`, `sorted`, `next`, `iter`.
 - **Standard Modules**:
+  - `threading`: `Thread`, `Lock`, `RLock`, `Semaphore`, `Event`, `get_ident()`, `current_thread()`, `active_count()`.
+  - `concurrent.futures`: `ThreadPoolExecutor`, `as_completed()`, `Future`.
   - `asyncio`: `run(coro)`, `sleep(seconds)`.
   - `math`: `pi`, `e`, `tau`, `inf`, `nan`, `sqrt`, `sin`, `cos`, `floor`, `ceil`.
   - `time`: `time()`, `perf_counter()`, `sleep()`.
@@ -262,7 +267,7 @@ The standalone binary will be generated at `./zig-out/bin/zython`.
 ./zig-out/bin/zython
 ```
 ```python
-Zython 0.4.0 (Python 3.15 compatibility layer, Zig 0.17.1)
+Zython 0.8.0 (Python 3.15 compatibility layer, Zig 0.17.1)
 Type 'exit()' to exit.
 >>> [x * x for x in range(5)]
 [0, 1, 4, 9, 16]
@@ -282,6 +287,7 @@ Type 'exit()' to exit.
 # Run test suite
 ./zig-out/bin/zython tests/final_pure_tests/01_compute_and_algorithms.py
 ./zig-out/bin/zython tests/final_pure_tests/04_loop_mechanics_ground_reality.py
+./zig-out/bin/zython tests/final_pure_tests/06_multithreading_and_concurrency.py
 ```
 
 ---
@@ -302,6 +308,7 @@ zython-/
 │   ├── 04_phase5_copy_and_patch_jit_v0.5.0.md     # Phase 5 Native JIT Compiler
 │   ├── 05_phase6_bignums_decorators_and_context_managers_v0.6.0.md # Phase 6 Bignums & with
 │   ├── 06_phase7_generators_coroutines_and_async_v0.7.0.md        # Phase 7 Generators & async
+│   ├── 07_phase8_multithreading_and_threadpool_v0.8.0.md         # Phase 8 Concurrency & Pools
 │   ├── achievements.md    # Master achievements and bug resolution scorecard
 │   └── roadmap.md         # Multi-phase engineering roadmap and completion matrix
 ├── src/
@@ -324,7 +331,8 @@ zython-/
         ├── 02_data_structures_and_collections.py
         ├── 03_oop_polymorphism.py
         ├── 04_loop_mechanics_ground_reality.py
-        └── 05_edge_cases_and_issues.py
+        ├── 05_edge_cases_and_issues.py
+        └── 06_multithreading_and_concurrency.py
 ```
 
 ---

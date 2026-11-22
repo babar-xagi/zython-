@@ -12,6 +12,7 @@ pub const Environment = struct {
     allocator: Allocator,
     parent: ?*Environment,
     globals: ?*Environment,
+    mutex: value_mod.AtomicMutex = .{},
 
     // Fast inline slots in CPU cache (avoids hash map allocation for 99.9% of functions!)
     fast_slots: [32]LocalSlot = undefined,
@@ -28,6 +29,7 @@ pub const Environment = struct {
             .allocator = allocator,
             .parent = parent,
             .globals = if (parent) |p| (p.globals orelse p) else null,
+            .mutex = .{},
             .fast_count = 0,
             .bindings = null,
             .global_vars = null,
@@ -65,6 +67,14 @@ pub const Environment = struct {
     }
 
     pub fn getSlotPtr(self: *Environment, name: []const u8) ?*Value {
+        if (self.global_vars) |*gv| {
+            if (gv.contains(name)) {
+                if (self.globals) |g| {
+                    return g.getSlotPtr(name);
+                }
+            }
+        }
+
         var i: u8 = 0;
         while (i < self.fast_count) : (i += 1) {
             if (self.fast_slots[i].name.ptr == name.ptr or std.mem.eql(u8, self.fast_slots[i].name, name)) {
@@ -121,6 +131,9 @@ pub const Environment = struct {
             }
         }
 
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
         // 1. Check existing fast slots
         var i: u8 = 0;
         while (i < self.fast_count) : (i += 1) {
@@ -148,10 +161,15 @@ pub const Environment = struct {
         if (self.global_vars) |*gv| {
             if (gv.contains(name)) {
                 if (self.globals) |g| {
-                    return g.assign(name, val);
+                    if (g != self) {
+                        return g.assign(name, val);
+                    }
                 }
             }
         }
+
+        self.mutex.lock();
+        defer self.mutex.unlock();
 
         var i: u8 = 0;
         while (i < self.fast_count) : (i += 1) {

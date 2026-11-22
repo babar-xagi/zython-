@@ -40,7 +40,7 @@ flowchart TD
 ### 2.1 Monomorphic Inline Caching (MIC) on Attributes & Methods
 In baseline v0.1.0, every attribute lookup (`obj.attr`) or method call (`obj.method()`) performed linear string searches through instance attribute slots and class dictionaries.
 
-In v0.2.0, we augmented `Expr.attribute` in [`src/ast.zig`](file:///c:/Users/DELL/Downloads/zython/src/ast.zig#L82):
+In v0.2.0, we augmented `Expr.attribute` in [`src/ast.zig`](file:///home/xagi/Desktop/zig_com/zython-/src/ast.zig#L82):
 ```zig
 pub const Expr = union(enum) {
     ...
@@ -60,13 +60,13 @@ pub const Expr = union(enum) {
 
 ### 2.2 Expanded CPU Fast Slots (32 Locals, 16 Attributes)
 To prevent hash map allocations in complex functions and OOP classes:
-1. **Environment Fast Slots**: Expanded `fast_slots` in [`src/environment.zig`](file:///c:/Users/DELL/Downloads/zython/src/environment.zig#L17) from 8 to **32 slots**:
+1. **Environment Fast Slots**: Expanded `fast_slots` in [`src/environment.zig`](file:///home/xagi/Desktop/zig_com/zython-/src/environment.zig#L17) from 8 to **32 slots**:
    ```zig
    fast_slots: [32]LocalSlot = undefined,
    fast_count: u8 = 0,
    ```
    Furthermore, pointer equality fast-paths (`slot.name.ptr == id.name.ptr`) bypass string slice equality comparisons.
-2. **Object Attribute Inline Slots**: Expanded `inline_slots` in [`src/value.zig`](file:///c:/Users/DELL/Downloads/zython/src/value.zig#L106) from 8 to **16 slots**:
+2. **Object Attribute Inline Slots**: Expanded `inline_slots` in [`src/value.zig`](file:///home/xagi/Desktop/zig_com/zython-/src/value.zig#L106) from 8 to **16 slots**:
    ```zig
    inline_slots: [16]FieldSlot = undefined,
    inline_count: u8 = 0,
@@ -111,7 +111,7 @@ In `aug_assign`, attribute assignments (`self.hp -= dmg` or `self.mana -= cost`)
 ---
 
 ### 2.6 Complete Stepped Slicing Engine (BUG-06 Fix)
-The subscript evaluator in [`src/interpreter.zig`](file:///c:/Users/DELL/Downloads/zython/src/interpreter.zig#L1693) now provides full Pythonic slicing semantics for lists, strings, and tuples:
+The subscript evaluator in [`src/interpreter.zig`](file:///home/xagi/Desktop/zig_com/zython-/src/interpreter.zig#L1693) now provides full Pythonic slicing semantics for lists, strings, and tuples:
 * Forward stepping: `arr[start:end:step]` (e.g. `nums[::2]`).
 * Reverse stepping: Negative steps (e.g. `nums[::-1]`).
 * Automatic bounds clamping and negative index wrapping.

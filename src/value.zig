@@ -176,6 +176,7 @@ pub const BuiltinFn = *const fn (allocator: Allocator, env_opaque: ?*anyopaque, 
 pub const PyBuiltin = struct {
     name: []const u8,
     func: BuiltinFn,
+    extra: ?*anyopaque = null,
 };
 
 pub const PyFunction = struct {
@@ -229,6 +230,229 @@ pub const PyCoroutine = struct {
         self.* = .{
             .name = name,
             .result = result,
+        };
+        return self;
+    }
+};
+
+pub const AtomicMutex = struct {
+    state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+
+    pub fn lock(self: *AtomicMutex) void {
+        while (self.state.cmpxchgWeak(false, true, .acquire, .monotonic) != null) {
+            std.Thread.yield() catch {};
+        }
+    }
+
+    pub fn unlock(self: *AtomicMutex) void {
+        self.state.store(false, .release);
+    }
+};
+
+pub const AtomicEvent = struct {
+    state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+
+    pub fn set(self: *AtomicEvent) void {
+        self.state.store(true, .release);
+    }
+
+    pub fn wait(self: *AtomicEvent) void {
+        while (!self.state.load(.acquire)) {
+            std.Thread.yield() catch {};
+        }
+    }
+
+    pub fn isSet(self: *AtomicEvent) bool {
+        return self.state.load(.acquire);
+    }
+};
+
+pub const PyThread = struct {
+    name: []const u8,
+    ident: i64,
+    target: Value,
+    args: []const Value,
+    thread_handle: ?std.Thread = null,
+    is_alive: bool = false,
+    has_joined: bool = false,
+    daemon: bool = false,
+    result: Value = .none,
+    err: ?anyerror = null,
+    mutex: AtomicMutex = .{},
+
+    pub fn init(allocator: Allocator, name: []const u8, ident: i64, target: Value, args: []const Value) !*PyThread {
+        const self = try allocator.create(PyThread);
+        const persistent_args = try allocator.dupe(Value, args);
+        self.* = .{
+            .name = name,
+            .ident = ident,
+            .target = target,
+            .args = persistent_args,
+            .thread_handle = null,
+            .is_alive = false,
+            .has_joined = false,
+            .daemon = false,
+            .result = .none,
+            .err = null,
+            .mutex = .{},
+        };
+        return self;
+    }
+};
+
+pub const PyLock = struct {
+    mutex: AtomicMutex = .{},
+    is_locked: bool = false,
+    is_rlock: bool = false,
+    acquire_count: u32 = 0,
+    owner: ?std.Thread.Id = null,
+
+    pub fn init(allocator: Allocator, is_rlock: bool) !*PyLock {
+        const self = try allocator.create(PyLock);
+        self.* = .{
+            .mutex = .{},
+            .is_locked = false,
+            .is_rlock = is_rlock,
+            .acquire_count = 0,
+            .owner = null,
+        };
+        return self;
+    }
+
+    pub fn acquire(self: *PyLock) void {
+        const tid = std.Thread.getCurrentId();
+        if (self.is_rlock) {
+            if (self.owner != null and self.owner.? == tid) {
+                self.acquire_count += 1;
+                return;
+            }
+        }
+        self.mutex.lock();
+        self.owner = tid;
+        self.is_locked = true;
+        self.acquire_count = 1;
+    }
+
+    pub fn release(self: *PyLock) void {
+        if (self.acquire_count > 0) {
+            self.acquire_count -= 1;
+            if (self.acquire_count == 0) {
+                self.owner = null;
+                self.is_locked = false;
+                self.mutex.unlock();
+            }
+        }
+    }
+};
+
+pub const PySemaphore = struct {
+    value: std.atomic.Value(i64),
+    mutex: AtomicMutex = .{},
+
+    pub fn init(allocator: Allocator, initial_val: i64) !*PySemaphore {
+        const self = try allocator.create(PySemaphore);
+        self.* = .{
+            .value = std.atomic.Value(i64).init(initial_val),
+            .mutex = .{},
+        };
+        return self;
+    }
+
+    pub fn acquire(self: *PySemaphore) void {
+        while (true) {
+            self.mutex.lock();
+            const cur = self.value.load(.acquire);
+            if (cur > 0) {
+                self.value.store(cur - 1, .release);
+                self.mutex.unlock();
+                return;
+            }
+            self.mutex.unlock();
+            std.Thread.yield() catch {};
+        }
+    }
+
+    pub fn release(self: *PySemaphore) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        _ = self.value.fetchAdd(1, .release);
+    }
+};
+
+pub const PyEvent = struct {
+    state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+
+    pub fn init(allocator: Allocator) !*PyEvent {
+        const self = try allocator.create(PyEvent);
+        self.* = .{
+            .state = std.atomic.Value(bool).init(false),
+        };
+        return self;
+    }
+
+    pub fn set(self: *PyEvent) void {
+        self.state.store(true, .release);
+    }
+
+    pub fn clear(self: *PyEvent) void {
+        self.state.store(false, .release);
+    }
+
+    pub fn isSet(self: *PyEvent) bool {
+        return self.state.load(.acquire);
+    }
+
+    pub fn wait(self: *PyEvent) bool {
+        while (!self.state.load(.acquire)) {
+            std.Thread.yield() catch {};
+        }
+        return true;
+    }
+};
+
+pub const PyFuture = struct {
+    event: AtomicEvent = .{},
+    result_val: Value = .none,
+    err: ?anyerror = null,
+
+    pub fn init(allocator: Allocator) !*PyFuture {
+        const self = try allocator.create(PyFuture);
+        self.* = .{
+            .event = .{},
+            .result_val = .none,
+            .err = null,
+        };
+        return self;
+    }
+
+    pub fn setResult(self: *PyFuture, val: Value) void {
+        self.result_val = val;
+        self.event.set();
+    }
+
+    pub fn setError(self: *PyFuture, err: anyerror) void {
+        self.err = err;
+        self.event.set();
+    }
+
+    pub fn getResult(self: *PyFuture) anyerror!Value {
+        self.event.wait();
+        if (self.err) |e| return e;
+        return self.result_val;
+    }
+};
+
+pub const PyThreadPool = struct {
+    max_workers: usize,
+    allocator: Allocator,
+    is_shutdown: bool = false,
+
+    pub fn init(allocator: Allocator, max_workers: usize) !*PyThreadPool {
+        const self = try allocator.create(PyThreadPool);
+        self.* = .{
+            .max_workers = if (max_workers == 0) 1 else max_workers,
+            .allocator = allocator,
+            .is_shutdown = false,
         };
         return self;
     }
@@ -448,6 +672,12 @@ pub const Value = union(enum) {
     iterator: *PyIterator,
     generator: *PyGenerator,
     coroutine: *PyCoroutine,
+    thread: *PyThread,
+    lock: *PyLock,
+    semaphore: *PySemaphore,
+    event: *PyEvent,
+    future: *PyFuture,
+    thread_pool: *PyThreadPool,
     return_flow,
     break_flow,
     continue_flow,
@@ -487,7 +717,7 @@ pub const Value = union(enum) {
             .dict => |d| d.entries.items.len > 0,
             .set => |s| s.items.items.len > 0,
             .range => |r| r.length() > 0,
-            .function, .builtin, .class, .instance, .bound_method, .module, .iterator, .generator, .coroutine => true,
+            .function, .builtin, .class, .instance, .bound_method, .module, .iterator, .generator, .coroutine, .thread, .lock, .semaphore, .event, .future, .thread_pool => true,
             .return_flow, .break_flow, .continue_flow => false,
         };
     }
@@ -513,6 +743,12 @@ pub const Value = union(enum) {
             .iterator => "iterator",
             .generator => "generator",
             .coroutine => "coroutine",
+            .thread => "Thread",
+            .lock => "Lock",
+            .semaphore => "Semaphore",
+            .event => "Event",
+            .future => "Future",
+            .thread_pool => "ThreadPoolExecutor",
             .return_flow => "return",
             .break_flow => "break",
             .continue_flow => "continue",
@@ -613,6 +849,30 @@ pub const Value = union(enum) {
                 if (other != .coroutine) return false;
                 return co == other.coroutine;
             },
+            .thread => |t| {
+                if (other != .thread) return false;
+                return t == other.thread;
+            },
+            .lock => |l| {
+                if (other != .lock) return false;
+                return l == other.lock;
+            },
+            .semaphore => |s| {
+                if (other != .semaphore) return false;
+                return s == other.semaphore;
+            },
+            .event => |e| {
+                if (other != .event) return false;
+                return e == other.event;
+            },
+            .future => |f| {
+                if (other != .future) return false;
+                return f == other.future;
+            },
+            .thread_pool => |p| {
+                if (other != .thread_pool) return false;
+                return p == other.thread_pool;
+            },
             else => return false,
         }
     }
@@ -695,6 +955,12 @@ pub const Value = union(enum) {
             .iterator => return "<iterator object>",
             .generator => |g| return std.fmt.allocPrint(allocator, "<generator object {s}>", .{g.name}),
             .coroutine => |co| return std.fmt.allocPrint(allocator, "<coroutine object {s}>", .{co.name}),
+            .thread => |t| return std.fmt.allocPrint(allocator, "<Thread({s}, ident={d}, {s})>", .{ t.name, t.ident, if (t.is_alive) "alive" else "stopped" }),
+            .lock => |l| return std.fmt.allocPrint(allocator, "<{s} _thread.lock object at 0x{x}>", .{ if (l.is_locked) "locked" else "unlocked", @intFromPtr(l) }),
+            .semaphore => |s| return std.fmt.allocPrint(allocator, "<_thread.Semaphore object at 0x{x}>", .{@intFromPtr(s)}),
+            .event => |e| return std.fmt.allocPrint(allocator, "<threading.Event object at 0x{x} is_set={s}>", .{ @intFromPtr(e), if (e.isSet()) "True" else "False" }),
+            .future => |f| return std.fmt.allocPrint(allocator, "<Future at 0x{x} state={s}>", .{ @intFromPtr(f), if (f.event.isSet()) "finished" else "pending" }),
+            .thread_pool => |p| return std.fmt.allocPrint(allocator, "<ThreadPoolExecutor max_workers={d}>", .{p.max_workers}),
             .return_flow => return "return",
             .break_flow => return "break",
             .continue_flow => return "continue",

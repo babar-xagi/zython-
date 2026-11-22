@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Zython Logo Banner](https://img.shields.io/badge/Zython-Python%20in%20Zig-orange?style=for-the-badge&logo=zig)
-![Version](https://img.shields.io/badge/Version-v0.4.0-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v0.8.0-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 **The definitive operational manual for installing, building, utilizing, and extending Zython.**
@@ -448,6 +448,62 @@ print("Python Version:", sys.version)
 print("Platform:      ", sys.platform)
 ```
 
+#### 4. `threading` Module (Preemptive Native Multi-Threading)
+```python
+import threading
+import time
+
+counter = 0
+lock = threading.Lock()
+
+def worker(thread_id, increments):
+    global counter
+    for _ in range(increments):
+        with lock:
+            counter += 1
+
+threads = []
+for i in range(4):
+    t = threading.Thread(target=worker, args=(i, 250))
+    threads.append(t)
+    t.start()
+
+for t in threads:
+    t.join()
+
+print("Synchronized Counter (expected 1000):", counter)
+```
+
+#### 5. `concurrent.futures` Module (Worker ThreadPools)
+```python
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def square(x):
+    return x * x
+
+with ThreadPoolExecutor(max_workers=4) as executor:
+    # 1. Map over iterable
+    results = executor.map(square, [1, 2, 3, 4, 5])
+    print("Mapped Squares:", results)
+
+    # 2. Submit individual tasks
+    futures = [executor.submit(square, n) for n in [10, 20, 30]]
+    for fut in as_completed(futures):
+        print("Completed Future Result:", fut.result())
+```
+
+#### 6. `asyncio` Module (Asynchronous Coroutines)
+```python
+import asyncio
+
+async def compute():
+    await asyncio.sleep(0.01)
+    return 42
+
+result = asyncio.run(compute())
+print("Async computation result:", result)
+```
+
 ---
 
 ## 🧪 7. Running Tests & Benchmarks
@@ -468,10 +524,19 @@ zig build test --summary all
 Validates language compatibility across arithmetic, control flow, functions, OOP, and data structures:
 
 ```bash
+# Core regression tests
 ./zig-out/bin/zython tests/test_basic.py
 ./zig-out/bin/zython tests/test_control.py
 ./zig-out/bin/zython tests/test_functions.py
 ./zig-out/bin/zython tests/test_classes.py
+
+# Final ground-reality empirical test suites (Phases 1 - 8)
+./zig-out/bin/zython tests/final_pure_tests/01_compute_and_algorithms.py
+./zig-out/bin/zython tests/final_pure_tests/02_data_structures_and_collections.py
+./zig-out/bin/zython tests/final_pure_tests/03_oop_polymorphism.py
+./zig-out/bin/zython tests/final_pure_tests/04_loop_mechanics_ground_reality.py
+./zig-out/bin/zython tests/final_pure_tests/05_edge_cases_and_issues.py
+./zig-out/bin/zython tests/final_pure_tests/06_multithreading_and_concurrency.py
 ```
 *All tests should complete with exit code 0.*
 

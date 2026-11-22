@@ -417,7 +417,17 @@ pub const Parser = struct {
     }
 
     fn parseImport(self: *Parser) !Stmt {
-        const mod_tok = try self.consume(.identifier, "Expected module name after 'import'");
+        var mod_buf: std.ArrayList(u8) = .empty;
+        const first_tok = try self.consume(.identifier, "Expected module name after 'import'");
+        try mod_buf.appendSlice(self.allocator, first_tok.lexeme);
+
+        while (try self.match(.dot)) {
+            try mod_buf.append(self.allocator, '.');
+            const next_tok = try self.consume(.identifier, "Expected identifier after '.' in module name");
+            try mod_buf.appendSlice(self.allocator, next_tok.lexeme);
+        }
+        const mod_name = try mod_buf.toOwnedSlice(self.allocator);
+
         var as_name: ?[]const u8 = null;
         if (try self.match(.kw_as)) {
             const as_tok = try self.consume(.identifier, "Expected alias name after 'as'");
@@ -425,14 +435,24 @@ pub const Parser = struct {
         }
         return Stmt{
             .import_stmt = .{
-                .module_name = mod_tok.lexeme,
+                .module_name = mod_name,
                 .as_name = as_name,
             },
         };
     }
 
     fn parseFromImport(self: *Parser) !Stmt {
-        const mod_tok = try self.consume(.identifier, "Expected module name after 'from'");
+        var mod_buf: std.ArrayList(u8) = .empty;
+        const first_tok = try self.consume(.identifier, "Expected module name after 'from'");
+        try mod_buf.appendSlice(self.allocator, first_tok.lexeme);
+
+        while (try self.match(.dot)) {
+            try mod_buf.append(self.allocator, '.');
+            const next_tok = try self.consume(.identifier, "Expected identifier after '.' in module name");
+            try mod_buf.appendSlice(self.allocator, next_tok.lexeme);
+        }
+        const mod_name = try mod_buf.toOwnedSlice(self.allocator);
+
         _ = try self.consume(.kw_import, "Expected 'import' after module name");
 
         var names: std.ArrayList([]const u8) = .empty;
@@ -454,7 +474,7 @@ pub const Parser = struct {
 
         return Stmt{
             .import_from_stmt = .{
-                .module_name = mod_tok.lexeme,
+                .module_name = mod_name,
                 .names = names.items,
                 .as_names = as_names.items,
             },

@@ -8,14 +8,15 @@ Welcome to the internal engineering documentation and architectural reference fo
 
 | Document | Purpose | Key Topics Covered |
 |---|---|---|
-| [**1. Baseline Architecture (v0.1.0)**](file:///c:/Users/DELL/Downloads/zython/developer_doc/01_baseline_architecture_v0.1.0.md) | Initial Architecture & Discovery | • Recursive AST tree-walking interpreter<br>• `fast_slots: [8]` CPU cache design<br>• Peephole loop reductions ($O(1)$)<br>• Pros, cons, bottlenecks & limitations |
-| [**2. Phase 2 Architecture (v0.2.0)**](file:///c:/Users/DELL/Downloads/zython/developer_doc/02_current_architecture_v0.2.0.md) | Optimized Architecture & Bugfixes | • Monomorphic inline caching (MIC)<br>• Expanded fast slots (32 locals, 16 attributes)<br>• Zero-allocation method dispatch<br>• Slicing, f-strings, exception matching<br>• Initial benchmark baselines vs CPython 3.14 |
-| [**3. Future Architecture & JIT Blueprint**](file:///c:/Users/DELL/Downloads/zython/developer_doc/03_future_architecture_v0.3.0_to_v0.5.0.md) | Blueprint to 50× – 100× Speedup | • Phase 3 Bytecode VM (**Delivered**)<br>• Phase 4 Adaptive Specialization (**Delivered**)<br>• Phase 5 Copy-and-Patch Native JIT Compiler (**Delivered**)<br>• NaN-boxing 64-bit word value model |
-| [**4. Phase 5 Architecture (v0.5.0)**](file:///c:/Users/DELL/Downloads/zython/developer_doc/04_phase5_copy_and_patch_jit_v0.5.0.md) | Native JIT Compiler & 55.2× Speedup | • Copy-and-Patch JIT compilation<br>• Executable memory arena (`mmap/PROT_EXEC`)<br>• Binary machine code stencils<br>• Empirical 55.2× speedup on fib(26) |
-| [**5. Phase 6 Architecture (v0.6.0)**](file:///c:/Users/DELL/Downloads/zython/developer_doc/05_phase6_bignums_decorators_and_context_managers_v0.6.0.md) | Bignums, Context Managers & Decorators | • Multi-limb arbitrary precision (`PyBigInt`)<br>• `with EXPR as VAR:` context managers<br>• `@decorator` syntax wrapping<br>• 100% parity across all edge cases |
-| [**6. Phase 7 Architecture (v0.7.0)**](file:///c:/Users/DELL/Downloads/zython/developer_doc/06_phase7_generators_coroutines_and_async_v0.7.0.md) | Stackless Generators & Async/Await | • Stackless `PyGenerator` & `yield`<br>• Iteration protocol (`next()`, `__iter__()`)<br>• `async def` & `await` expressions (`PyCoroutine`)<br>• `asyncio.run()` event loop scheduler |
-| [**7. Master Achievements & Bug Audit**](file:///c:/Users/DELL/Downloads/zython/developer_doc/achievements.md) | Comprehensive Audit & Fix Records | • BUG-01 through BUG-08 root causes & fixes<br>• Phase 4 Quickening & PIC achievements<br>• Phase 5 JIT compiler achievements & 55.2× speedup<br>• Phase 6 Bignum, context manager & decorator audit<br>• Phase 7 Generator & coroutine audit |
-| [**8. Master Roadmap & Completion Matrix**](file:///c:/Users/DELL/Downloads/zython/developer_doc/roadmap.md) | Execution Plan & Milestones | • Phases 1 through 7 marked 100% COMPLETE<br>• Phase 8 Native Multi-threading specification<br>• Full language feature compatibility matrix |
+| [**1. Baseline Architecture (v0.1.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/01_baseline_architecture_v0.1.0.md) | Initial Architecture & Discovery | • Recursive AST tree-walking interpreter<br>• `fast_slots: [8]` CPU cache design<br>• Peephole loop reductions ($O(1)$)<br>• Pros, cons, bottlenecks & limitations |
+| [**2. Phase 2 Architecture (v0.2.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/02_current_architecture_v0.2.0.md) | Optimized Architecture & Bugfixes | • Monomorphic inline caching (MIC)<br>• Expanded fast slots (32 locals, 16 attributes)<br>• Zero-allocation method dispatch<br>• Slicing, f-strings, exception matching<br>• Initial benchmark baselines vs CPython 3.14 |
+| [**3. Future Architecture & JIT Blueprint**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/03_future_architecture_v0.3.0_to_v0.5.0.md) | Blueprint to 50× – 100× Speedup | • Phase 3 Bytecode VM (**Delivered**)<br>• Phase 4 Adaptive Specialization (**Delivered**)<br>• Phase 5 Copy-and-Patch Native JIT Compiler (**Delivered**)<br>• NaN-boxing 64-bit word value model |
+| [**4. Phase 5 Architecture (v0.5.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/04_phase5_copy_and_patch_jit_v0.5.0.md) | Native JIT Compiler & 55.2× Speedup | • Copy-and-Patch JIT compilation<br>• Executable memory arena (`mmap/PROT_EXEC`)<br>• Binary machine code stencils<br>• Empirical 55.2× speedup on fib(26) |
+| [**5. Phase 6 Architecture (v0.6.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/05_phase6_bignums_decorators_and_context_managers_v0.6.0.md) | Bignums, Context Managers & Decorators | • Multi-limb arbitrary precision (`PyBigInt`)<br>• `with EXPR as VAR:` context managers<br>• `@decorator` syntax wrapping<br>• 100% parity across all edge cases |
+| [**6. Phase 7 Architecture (v0.7.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/06_phase7_generators_coroutines_and_async_v0.7.0.md) | Stackless Generators & Async/Await | • Stackless `PyGenerator` & `yield`<br>• Iteration protocol (`next()`, `__iter__()`)<br>• `async def` & `await` expressions (`PyCoroutine`)<br>• `asyncio.run()` event loop scheduler |
+| [**7. Phase 8 Architecture (v0.8.0)**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/07_phase8_multithreading_and_threadpool_v0.8.0.md) | Native Multi-Threading & Concurrency | • Preemptive OS threads (`std.Thread.spawn`)<br>• Lock, RLock, Semaphore, Event primitives<br>• `ThreadPoolExecutor` & `as_completed`<br>• GIL-free multi-core parallel execution |
+| [**8. Master Achievements & Bug Audit**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/achievements.md) | Comprehensive Audit & Fix Records | • BUG-01 through BUG-08 root causes & fixes<br>• Phase 4 Quickening & PIC achievements<br>• Phase 5 JIT compiler achievements & 55.2× speedup<br>• Phase 6 Bignum, context manager & decorator audit<br>• Phase 7 Generator & coroutine audit<br>• Phase 8 Multi-threading & ThreadPool audit |
+| [**9. Master Roadmap & Completion Matrix**](file:///home/xagi/Desktop/zig_com/zython-/developer_doc/roadmap.md) | Execution Plan & Milestones | • Phases 1 through 8 marked 100% COMPLETE<br>• Phase 9 C Extension / PyO3 specification<br>• Full language feature compatibility matrix |
 
 ---
 
@@ -68,16 +69,17 @@ flowchart LR
         D6 --> E6["100% Edge Case Parity"]
     end
 
-    subgraph Phase7 ["v0.7.0: Generators & Async (✅ Current)"]
+    subgraph Phase7 ["v0.7.0: Generators & Async (✅)"]
         A7["Async & Yield Grammar"] --> B7["Stackless PyGenerator"]
         B7 --> C7["PyCoroutine State Machine"]
         C7 --> D7["asyncio.run() Scheduler"]
         D7 --> E7["next() Iteration Protocol"]
     end
 
-    subgraph Phase8 ["v0.8.0: Multi-Threading (⏳ Planned)"]
+    subgraph Phase8 ["v0.8.0: Multi-Threading (✅ Released)"]
         A8["Parallel Runtime"] --> B8["Thread Isolation"]
         B8 --> C8["GIL-free ThreadPool"]
+        C8 --> D8["Lock / RLock / Semaphore"]
     end
 
     Phase1 --> Phase2

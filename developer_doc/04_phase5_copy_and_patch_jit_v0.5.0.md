@@ -70,7 +70,7 @@ When a function is called either through the AST interpreter (`callValue`) or in
 
 ## 📊 3. Empirical Ground Reality Benchmarks vs CPython 3.14.4
 
-All tests executed on Ubuntu WSL2 (Linux 5.10.x, x86_64, AVX2) using the test suite in [`tests/final_pure_tests/`](file:///c:/Users/DELL/Downloads/zython/tests/final_pure_tests/):
+All tests executed on Ubuntu WSL2 (Linux 5.10.x, x86_64, AVX2) using the test suite in [`tests/final_pure_tests/`](file:///home/xagi/Desktop/zig_com/zython-/tests/final_pure_tests/):
 
 | Workload | ⚡ Zython 0.5.0 (Native JIT) | 🐍 CPython 3.14.4 | 🚀 Speedup Factor |
 |---|:---:|:---:|:---:|

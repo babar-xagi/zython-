@@ -40,6 +40,8 @@ const VM = vm_mod.VM;
 const jit_mod = @import("jit.zig");
 const JitEngine = jit_mod.JitEngine;
 
+pub threadlocal var current_vm: ?*VM = null;
+
 pub const Interpreter = struct {
     allocator: Allocator,
     builtins_env: *Environment,
@@ -50,6 +52,8 @@ pub const Interpreter = struct {
     // High-performance environment pooling for 0-allocation function execution
     env_pool: [2048]*Environment = undefined,
     env_pool_top: usize = 0,
+    env_pool_mutex: value_mod.AtomicMutex = .{},
+    thread_counter: std.atomic.Value(i64) = std.atomic.Value(i64).init(1),
     return_value: Value = .none,
     current_yield_gen: ?*PyGenerator = null,
     vm: VM = undefined,
@@ -64,6 +68,7 @@ pub const Interpreter = struct {
         try builtins_mod.populateBuiltins(allocator, b_env);
 
         const g_env = try Environment.init(allocator, b_env);
+        g_env.globals = g_env;
 
         self.* = .{
             .allocator = allocator,
@@ -72,6 +77,8 @@ pub const Interpreter = struct {
             .modules = std.StringHashMap(Value).init(allocator),
             .cli_args = cli_args,
             .env_pool_top = 0,
+            .env_pool_mutex = .{},
+            .thread_counter = std.atomic.Value(i64).init(1),
             .return_value = .none,
             .vm = undefined,
             .jit = undefined,
@@ -100,20 +107,35 @@ pub const Interpreter = struct {
         const mod_asyncio = try builtins_mod.makeAsyncioModule(allocator);
         try self.modules.put("asyncio", mod_asyncio);
 
+        const mod_threading = try builtins_mod.makeThreadingModule(allocator);
+        try self.modules.put("threading", mod_threading);
+
+        const mod_cf = try builtins_mod.makeConcurrentFuturesModule(allocator);
+        try self.modules.put("concurrent.futures", mod_cf);
+
+        const mod_concurrent = try value_mod.PyModule.init(allocator, "concurrent");
+        try mod_concurrent.attributes.put("futures", mod_cf);
+        try self.modules.put("concurrent", Value{ .module = mod_concurrent });
+
         return self;
     }
 
     pub inline fn acquireEnv(self: *Interpreter, parent: ?*Environment) *Environment {
+        self.env_pool_mutex.lock();
         if (self.env_pool_top > 0) {
             self.env_pool_top -= 1;
             const env = self.env_pool[self.env_pool_top];
+            self.env_pool_mutex.unlock();
             env.reset(parent);
             return env;
         }
+        self.env_pool_mutex.unlock();
         return Environment.init(self.allocator, parent) catch unreachable;
     }
 
     pub inline fn releaseEnv(self: *Interpreter, env: *Environment) void {
+        self.env_pool_mutex.lock();
+        defer self.env_pool_mutex.unlock();
         if (!env.is_escaped and self.env_pool_top < self.env_pool.len) {
             self.env_pool[self.env_pool_top] = env;
             self.env_pool_top += 1;
@@ -933,8 +955,20 @@ pub const Interpreter = struct {
             },
             .import_stmt => |im| {
                 if (self.modules.get(im.module_name)) |mod_val| {
-                    const bind_name = im.as_name orelse im.module_name;
-                    try env.set(bind_name, mod_val);
+                    if (im.as_name) |as_n| {
+                        try env.set(as_n, mod_val);
+                    } else {
+                        if (std.mem.indexOfScalar(u8, im.module_name, '.')) |dot_idx| {
+                            const root_name = im.module_name[0..dot_idx];
+                            if (self.modules.get(root_name)) |root_mod| {
+                                try env.set(root_name, root_mod);
+                            } else {
+                                try env.set(im.module_name, mod_val);
+                            }
+                        } else {
+                            try env.set(im.module_name, mod_val);
+                        }
+                    }
                     return .none;
                 }
                 return error.ImportError;
@@ -1007,6 +1041,14 @@ pub const Interpreter = struct {
     fn assignTarget(self: *Interpreter, target: *Expr, val: Value, env: *Environment) anyerror!void {
         switch (target.*) {
             .identifier => |*id| {
+                if (env.global_vars) |*gv| {
+                    if (gv.contains(id.name)) {
+                        if (env.globals) |g| {
+                            try g.set(id.name, val);
+                            return;
+                        }
+                    }
+                }
                 if (id.slot_idx < env.fast_count) {
                     const slot = &env.fast_slots[id.slot_idx];
                     if (slot.name.ptr == id.name.ptr or std.mem.eql(u8, slot.name, id.name)) {
@@ -1088,6 +1130,15 @@ pub const Interpreter = struct {
         switch (expr.*) {
             .literal => |l| return l,
             .identifier => |*id| {
+                if (env.global_vars) |*gv| {
+                    if (gv.contains(id.name)) {
+                        if (env.globals) |g| {
+                            if (g.get(id.name)) |gv_val| return gv_val;
+                            self.last_error_msg = std.fmt.allocPrint(self.allocator, "name '{s}' is not defined", .{id.name}) catch null;
+                            return error.NameError;
+                        }
+                    }
+                }
                 if (id.slot_idx < env.fast_count) {
                     const slot = &env.fast_slots[id.slot_idx];
                     if (slot.name.ptr == id.name.ptr or std.mem.eql(u8, slot.name, id.name)) {
@@ -2106,6 +2157,422 @@ pub const Interpreter = struct {
                 }
                 return error.AttributeError;
             },
+            .thread => |t| {
+                if (std.mem.eql(u8, attr, "start")) {
+                    const thread_start = struct {
+                        fn call(allocator: Allocator, extra: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            _ = allocator;
+                            if (args.len < 1 or args[0] != .thread) return error.TypeError;
+                            const th_obj = args[0].thread;
+                            const interp_ptr: *Interpreter = @ptrCast(@alignCast(extra.?));
+
+                            const Worker = struct {
+                                interp: *Interpreter,
+                                target: *value_mod.PyThread,
+
+                                fn run(w: @This()) void {
+                                    var worker_vm = VM.init(w.interp.allocator, w.interp);
+                                    current_vm = &worker_vm;
+                                    defer current_vm = null;
+
+                                    w.target.mutex.lock();
+                                    w.target.is_alive = true;
+                                    w.target.mutex.unlock();
+
+                                    const res = w.interp.callValue(w.target.target, w.target.args, &.{}) catch |err| {
+                                        w.target.mutex.lock();
+                                        w.target.err = err;
+                                        w.target.is_alive = false;
+                                        w.target.mutex.unlock();
+                                        return;
+                                    };
+
+                                    w.target.mutex.lock();
+                                    w.target.result = res;
+                                    w.target.is_alive = false;
+                                    w.target.mutex.unlock();
+                                }
+                            };
+
+                            th_obj.thread_handle = try std.Thread.spawn(.{}, Worker.run, .{Worker{ .interp = interp_ptr, .target = th_obj }});
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "start", .func = thread_start, .extra = self };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .thread = t }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "join")) {
+                    const thread_join = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .thread) return error.TypeError;
+                            const th_obj = args[0].thread;
+                            if (th_obj.thread_handle) |handle| {
+                                handle.join();
+                                th_obj.thread_handle = null;
+                                th_obj.has_joined = true;
+                            }
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "join", .func = thread_join };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .thread = t }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "is_alive")) {
+                    const thread_is_alive = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .thread) return error.TypeError;
+                            const th_obj = args[0].thread;
+                            th_obj.mutex.lock();
+                            defer th_obj.mutex.unlock();
+                            return Value.makeBool(th_obj.is_alive);
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "is_alive", .func = thread_is_alive };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .thread = t }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "name")) return Value.makeString(self.allocator, t.name);
+                if (std.mem.eql(u8, attr, "ident")) return Value.makeInt(t.ident);
+                if (std.mem.eql(u8, attr, "daemon")) return Value.makeBool(t.daemon);
+                return error.AttributeError;
+            },
+            .lock => |l| {
+                if (std.mem.eql(u8, attr, "acquire") or std.mem.eql(u8, attr, "__enter__")) {
+                    const lock_acq = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .lock) return error.TypeError;
+                            args[0].lock.acquire();
+                            return args[0];
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "acquire", .func = lock_acq };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .lock = l }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "release") or std.mem.eql(u8, attr, "__exit__")) {
+                    const lock_rel = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .lock) return error.TypeError;
+                            args[0].lock.release();
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "release", .func = lock_rel };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .lock = l }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "locked")) {
+                    const lock_chk = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .lock) return error.TypeError;
+                            return Value.makeBool(args[0].lock.is_locked);
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "locked", .func = lock_chk };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .lock = l }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
+            .semaphore => |s| {
+                if (std.mem.eql(u8, attr, "acquire") or std.mem.eql(u8, attr, "__enter__")) {
+                    const sem_acq = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .semaphore) return error.TypeError;
+                            args[0].semaphore.acquire();
+                            return args[0];
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "acquire", .func = sem_acq };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .semaphore = s }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "release") or std.mem.eql(u8, attr, "__exit__")) {
+                    const sem_rel = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .semaphore) return error.TypeError;
+                            args[0].semaphore.release();
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "release", .func = sem_rel };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .semaphore = s }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
+            .event => |ev| {
+                if (std.mem.eql(u8, attr, "set")) {
+                    const ev_set = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .event) return error.TypeError;
+                            args[0].event.set();
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "set", .func = ev_set };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .event = ev }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "clear")) {
+                    const ev_clr = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .event) return error.TypeError;
+                            args[0].event.clear();
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "clear", .func = ev_clr };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .event = ev }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "is_set") or std.mem.eql(u8, attr, "isSet")) {
+                    const ev_chk = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .event) return error.TypeError;
+                            return Value.makeBool(args[0].event.isSet());
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "is_set", .func = ev_chk };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .event = ev }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "wait")) {
+                    const ev_wait = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .event) return error.TypeError;
+                            return Value.makeBool(args[0].event.wait());
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "wait", .func = ev_wait };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .event = ev }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
+            .future => |f| {
+                if (std.mem.eql(u8, attr, "result")) {
+                    const fut_res = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .future) return error.TypeError;
+                            return args[0].future.getResult();
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "result", .func = fut_res };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .future = f }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "done")) {
+                    const fut_done = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .future) return error.TypeError;
+                            return Value.makeBool(args[0].future.event.isSet());
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "done", .func = fut_done };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .future = f }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "exception")) {
+                    const fut_exc = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .future) return error.TypeError;
+                            _ = args[0].future.getResult() catch |err| {
+                                return Value.makeString(allocator, @errorName(err));
+                            };
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "exception", .func = fut_exc };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .future = f }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "cancel")) {
+                    const fut_cancel = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .future) return error.TypeError;
+                            return Value.makeBool(false);
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "cancel", .func = fut_cancel };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .future = f }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
+            .thread_pool => |p| {
+                if (std.mem.eql(u8, attr, "submit")) {
+                    const pool_submit = struct {
+                        fn call(allocator: Allocator, extra: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .thread_pool) return error.TypeError;
+                            const target = args[1];
+                            const task_args = try allocator.dupe(Value, args[2..]);
+                            const fut = try value_mod.PyFuture.init(allocator);
+                            const interp_ptr: *Interpreter = @ptrCast(@alignCast(extra.?));
+
+                            const TaskCtx = struct {
+                                interp: *Interpreter,
+                                target: Value,
+                                args: []const Value,
+                                fut: *value_mod.PyFuture,
+
+                                fn run(ctx: @This()) void {
+                                    var worker_vm = VM.init(ctx.interp.allocator, ctx.interp);
+                                    current_vm = &worker_vm;
+                                    defer current_vm = null;
+
+                                    const res = ctx.interp.callValue(ctx.target, ctx.args, &.{}) catch |err| {
+                                        ctx.fut.setError(err);
+                                        return;
+                                    };
+                                    ctx.fut.setResult(res);
+                                }
+                            };
+
+                            const th = try std.Thread.spawn(.{}, TaskCtx.run, .{TaskCtx{
+                                .interp = interp_ptr,
+                                .target = target,
+                                .args = task_args,
+                                .fut = fut,
+                            }});
+                            th.detach();
+                            return Value{ .future = fut };
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "submit", .func = pool_submit, .extra = self };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .thread_pool = p }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "map")) {
+                    const pool_map = struct {
+                        fn call(allocator: Allocator, extra: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 3 or args[0] != .thread_pool) return error.TypeError;
+                            const target = args[1];
+                            const iterable = args[2];
+                            const interp_ptr: *Interpreter = @ptrCast(@alignCast(extra.?));
+
+                            var item_list: std.ArrayList(Value) = .empty;
+                            switch (iterable) {
+                                .list => |l| try item_list.appendSlice(allocator, l.items.items),
+                                .tuple => |t| try item_list.appendSlice(allocator, t.items),
+                                .range => |r| {
+                                    var curr = r.start;
+                                    while ((r.step > 0 and curr < r.stop) or (r.step < 0 and curr > r.stop)) : (curr += r.step) {
+                                        try item_list.append(allocator, Value.makeInt(curr));
+                                    }
+                                },
+                                else => return error.TypeError,
+                            }
+
+                            const TaskCtx = struct {
+                                interp: *Interpreter,
+                                target: Value,
+                                args: [1]Value,
+                                fut: *value_mod.PyFuture,
+
+                                fn run(ctx: @This()) void {
+                                    var worker_vm = VM.init(ctx.interp.allocator, ctx.interp);
+                                    current_vm = &worker_vm;
+                                    defer current_vm = null;
+
+                                    const res = ctx.interp.callValue(ctx.target, &ctx.args, &.{}) catch |err| {
+                                        ctx.fut.setError(err);
+                                        return;
+                                    };
+                                    ctx.fut.setResult(res);
+                                }
+                            };
+
+                            var futures: std.ArrayList(*value_mod.PyFuture) = .empty;
+                            for (item_list.items) |it| {
+                                const fut = try value_mod.PyFuture.init(allocator);
+                                const th = try std.Thread.spawn(.{}, TaskCtx.run, .{TaskCtx{
+                                    .interp = interp_ptr,
+                                    .target = target,
+                                    .args = [1]Value{it},
+                                    .fut = fut,
+                                }});
+                                th.detach();
+                                try futures.append(allocator, fut);
+                            }
+
+                            const result_list = try value_mod.PyList.init(allocator);
+                            for (futures.items) |fut| {
+                                const r = fut.getResult() catch .none;
+                                try result_list.items.append(allocator, r);
+                            }
+                            return Value{ .list = result_list };
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "map", .func = pool_map, .extra = self };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .thread_pool = p }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "shutdown") or std.mem.eql(u8, attr, "__exit__")) {
+                    const pool_shut = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, _: []const Value, _: []const DictEntry) anyerror!Value {
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = attr, .func = pool_shut };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .thread_pool = p }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "__enter__")) {
+                    const pool_enter = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1) return error.TypeError;
+                            return args[0];
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "__enter__", .func = pool_enter };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .thread_pool = p }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
             else => return error.AttributeError,
         }
     }
@@ -2283,7 +2750,7 @@ pub const Interpreter = struct {
                 }
             },
             .builtin => |b| {
-                return b.func(self.allocator, null, args, kwargs);
+                return b.func(self.allocator, b.extra, args, kwargs);
             },
             .function => |f| {
                 if (f.jit_entry) |entry| {
@@ -2333,7 +2800,11 @@ pub const Interpreter = struct {
                             }
                         }
                     }
-                    return self.vm.runFunction(f, chunk, args, kwargs);
+                    if (current_vm) |vm_ptr| {
+                        return vm_ptr.runFunction(f, chunk, args, kwargs);
+                    } else {
+                        return self.vm.runFunction(f, chunk, args, kwargs);
+                    }
                 }
                 const parent_env: ?*Environment = if (f.closure_env) |ce| @ptrCast(@alignCast(ce)) else self.global_env;
                 // Acquire reusable environment from pool with ZERO heap allocation

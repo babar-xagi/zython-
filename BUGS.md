@@ -17,6 +17,7 @@ This document provides an exhaustive, root-cause analysis of all functional bugs
 | **BUG-07** | Exception type matching is bypassed | 🟡 **Medium** | `src/interpreter.zig:473`| ✅ **RESOLVED & VERIFIED** |
 | **BUG-08** | Bare tuple assignment requires parentheses | 🔵 **Minor** | `src/parser.zig:586` | ✅ **RESOLVED & VERIFIED** |
 | **BUG-09** | 64-bit integer overflow wrapping | 🔵 **Minor** | `src/interpreter.zig:650` | ℹ️ **Documented Architectural Tradeoff** |
+| **BUG-10** | Global scope resolution failure in threaded functions | 🔴 **Critical** | `src/interpreter.zig:20`, `src/environment.zig:114` | ✅ **RESOLVED & VERIFIED** |
 
 ---
 
@@ -281,3 +282,35 @@ print(2 ** 64)
 ```
 * **Expected**: `18446744073709551616`
 * **Actual (Zython)**: `0`
+
+---
+
+### 🔴 BUG-10: Global Scope Resolution Failure in Threaded & Nested Functions
+
+#### Description
+When a function declares a variable as `global` (e.g. `global counter`) and mutates it inside multi-threaded or nested invocations, Zython raised `RuntimeError: NameError: name 'counter' is not defined` or incorrectly mutated a local slot rather than the shared global environment.
+
+#### Root Cause
+1. In `src/interpreter.zig`, `Interpreter.init` initialized `g_env.globals` by inheriting `b_env` (the builtins environment). Consequently, `global_vars` lookups bypassed the script's actual global scope and searched `builtins_env`, where user variables did not exist.
+2. In `assignTarget` and `evalExpr` (`.identifier`), fast local slots were read and assigned prior to querying `env.global_vars`.
+3. In `src/environment.zig`, `Environment.getSlotPtr` returned local fast slots directly without checking if the identifier was declared in `self.global_vars`.
+
+#### Reproduction
+```python
+counter = 0
+
+def increment():
+    global counter
+    counter += 1
+
+increment()
+print(counter)
+```
+* **Before Fix (v0.7.0)**: Raised `RuntimeError: NameError: name 'counter' is not defined` ❌
+* **After Fix (v0.8.0)**: Correctly outputs `1` across all threads and contexts ✅
+
+#### Fix Applied
+- Set `g_env.globals = g_env;` explicitly in `src/interpreter.zig`.
+- Updated `assignTarget`, `evalExpr`, and `Environment.getSlotPtr` to check `env.global_vars.contains(name)` and route variable resolution directly to `env.globals`.
+- Added atomic mutex locking to `Environment.set` to guarantee thread safety under GIL-free concurrency.
+

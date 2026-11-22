@@ -156,9 +156,9 @@ Primes up to 15,000:
 ---
 
 ## 📚 6. References & Code Navigation
-* Core Value Model: [src/value.zig](file:///c:/Users/DELL/Downloads/zython/src/value.zig)
-* AST Generator & Async Nodes: [src/ast.zig](file:///c:/Users/DELL/Downloads/zython/src/ast.zig)
-* Grammar Parser: [src/parser.zig](file:///c:/Users/DELL/Downloads/zython/src/parser.zig)
-* Interpreter & Yield Engine: [src/interpreter.zig](file:///c:/Users/DELL/Downloads/zython/src/interpreter.zig)
-* Builtins & `asyncio` Module: [src/builtins.zig](file:///c:/Users/DELL/Downloads/zython/src/builtins.zig)
-* Edge Cases & Async Test Suite: [tests/final_pure_tests/05_edge_cases_and_issues.py](file:///c:/Users/DELL/Downloads/zython/tests/final_pure_tests/05_edge_cases_and_issues.py)
+* Core Value Model: [src/value.zig](file:///home/xagi/Desktop/zig_com/zython-/src/value.zig)
+* AST Generator & Async Nodes: [src/ast.zig](file:///home/xagi/Desktop/zig_com/zython-/src/ast.zig)
+* Grammar Parser: [src/parser.zig](file:///home/xagi/Desktop/zig_com/zython-/src/parser.zig)
+* Interpreter & Yield Engine: [src/interpreter.zig](file:///home/xagi/Desktop/zig_com/zython-/src/interpreter.zig)
+* Builtins & `asyncio` Module: [src/builtins.zig](file:///home/xagi/Desktop/zig_com/zython-/src/builtins.zig)
+* Edge Cases & Async Test Suite: [tests/final_pure_tests/05_edge_cases_and_issues.py](file:///home/xagi/Desktop/zig_com/zython-/tests/final_pure_tests/05_edge_cases_and_issues.py)
