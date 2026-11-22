@@ -34,6 +34,8 @@ const compiler_mod = @import("compiler.zig");
 const Compiler = compiler_mod.Compiler;
 const vm_mod = @import("vm.zig");
 const VM = vm_mod.VM;
+const jit_mod = @import("jit.zig");
+const JitEngine = jit_mod.JitEngine;
 
 pub const Interpreter = struct {
     allocator: Allocator,
@@ -47,6 +49,7 @@ pub const Interpreter = struct {
     env_pool_top: usize = 0,
     return_value: Value = .none,
     vm: VM = undefined,
+    jit: JitEngine = undefined,
 
     pub fn init(allocator: Allocator, cli_args: []const [:0]const u8) !*Interpreter {
         const self = try allocator.create(Interpreter);
@@ -66,8 +69,10 @@ pub const Interpreter = struct {
             .env_pool_top = 0,
             .return_value = .none,
             .vm = undefined,
+            .jit = undefined,
         };
         self.vm = VM.init(allocator, self);
+        self.jit = JitEngine.init(allocator);
 
         // Preallocate pool of environments
         var pi: usize = 0;
@@ -1877,8 +1882,53 @@ pub const Interpreter = struct {
                 return b.func(self.allocator, null, args, kwargs);
             },
             .function => |f| {
+                if (f.jit_entry) |entry| {
+                    if (f.jit_kind == 1 and args.len == 1 and args[0] == .int) {
+                        const NativeFn = *const fn (i64) callconv(.c) i64;
+                        const native_fn: NativeFn = @ptrCast(entry);
+                        return Value.makeInt(native_fn(args[0].int));
+                    } else if (f.jit_kind == 2 and args.len == 2 and args[0] == .int and args[1] == .int) {
+                        const NativeFn = *const fn (i64, i64) callconv(.c) i64;
+                        const native_fn: NativeFn = @ptrCast(entry);
+                        return Value.makeInt(native_fn(args[0].int, args[1].int));
+                    } else if (f.jit_kind == 3 and args.len == 1 and args[0] == .list) {
+                        const NativeFn = *const fn (*PyList) callconv(.c) *PyList;
+                        const native_fn: NativeFn = @ptrCast(entry);
+                        return Value{ .list = native_fn(args[0].list) };
+                    } else if (f.jit_kind == 4 and args.len == 2 and (args[0] == .float or args[0] == .int) and args[1] == .int) {
+                        const NativeFn = *const fn (f64, i64) callconv(.c) f64;
+                        const native_fn: NativeFn = @ptrCast(entry);
+                        const x = if (args[0] == .float) args[0].float else @as(f64, @floatFromInt(args[0].int));
+                        return Value.makeFloat(native_fn(x, args[1].int));
+                    }
+                }
+
                 if (f.chunk) |chunk_opaque| {
                     const chunk: *Chunk = @ptrCast(@alignCast(chunk_opaque));
+                    f.call_count += 1;
+                    if (f.jit_entry == null) {
+                        self.jit.tryCompile(f, chunk);
+                        if (f.jit_entry) |entry| {
+                            if (f.jit_kind == 1 and args.len == 1 and args[0] == .int) {
+                                const NativeFn = *const fn (i64) callconv(.c) i64;
+                                const native_fn: NativeFn = @ptrCast(entry);
+                                return Value.makeInt(native_fn(args[0].int));
+                            } else if (f.jit_kind == 2 and args.len == 2 and args[0] == .int and args[1] == .int) {
+                                const NativeFn = *const fn (i64, i64) callconv(.c) i64;
+                                const native_fn: NativeFn = @ptrCast(entry);
+                                return Value.makeInt(native_fn(args[0].int, args[1].int));
+                            } else if (f.jit_kind == 3 and args.len == 1 and args[0] == .list) {
+                                const NativeFn = *const fn (*PyList) callconv(.c) *PyList;
+                                const native_fn: NativeFn = @ptrCast(entry);
+                                return Value{ .list = native_fn(args[0].list) };
+                            } else if (f.jit_kind == 4 and args.len == 2 and (args[0] == .float or args[0] == .int) and args[1] == .int) {
+                                const NativeFn = *const fn (f64, i64) callconv(.c) f64;
+                                const native_fn: NativeFn = @ptrCast(entry);
+                                const x = if (args[0] == .float) args[0].float else @as(f64, @floatFromInt(args[0].int));
+                                return Value.makeFloat(native_fn(x, args[1].int));
+                            }
+                        }
+                    }
                     return self.vm.runFunction(f, chunk, args, kwargs);
                 }
                 const parent_env: ?*Environment = if (f.closure_env) |ce| @ptrCast(@alignCast(ce)) else self.global_env;

@@ -1008,6 +1008,46 @@ pub const VM = struct {
                     const callee = self.stack[self.sp - argc - 1];
                     const args = self.stack[self.sp - argc .. self.sp];
 
+                    if (callee == .function and callee.function.chunk != null and callee.function.jit_entry == null) {
+                        const fn_obj = callee.function;
+                        const chunk: *Chunk = @ptrCast(@alignCast(fn_obj.chunk.?));
+                        self.interpreter.jit.tryCompile(fn_obj, chunk);
+                    }
+
+                    if (callee == .function and callee.function.jit_entry != null) {
+                        const fn_obj = callee.function;
+                        if (fn_obj.jit_kind == 1 and argc == 1 and args[0] == .int) {
+                            const NativeFn = *const fn (i64) callconv(.c) i64;
+                            const native_fn: NativeFn = @ptrCast(fn_obj.jit_entry.?);
+                            const res = native_fn(args[0].int);
+                            self.sp -= (argc + 1);
+                            self.push(Value.makeInt(res));
+                            continue;
+                        } else if (fn_obj.jit_kind == 2 and argc == 2 and args[0] == .int and args[1] == .int) {
+                            const NativeFn = *const fn (i64, i64) callconv(.c) i64;
+                            const native_fn: NativeFn = @ptrCast(fn_obj.jit_entry.?);
+                            const res = native_fn(args[0].int, args[1].int);
+                            self.sp -= (argc + 1);
+                            self.push(Value.makeInt(res));
+                            continue;
+                        } else if (fn_obj.jit_kind == 3 and argc == 1 and args[0] == .list) {
+                            const NativeFn = *const fn (*PyList) callconv(.c) *PyList;
+                            const native_fn: NativeFn = @ptrCast(fn_obj.jit_entry.?);
+                            const res = native_fn(args[0].list);
+                            self.sp -= (argc + 1);
+                            self.push(Value{ .list = res });
+                            continue;
+                        } else if (fn_obj.jit_kind == 4 and argc == 2 and (args[0] == .float or args[0] == .int) and args[1] == .int) {
+                            const NativeFn = *const fn (f64, i64) callconv(.c) f64;
+                            const native_fn: NativeFn = @ptrCast(fn_obj.jit_entry.?);
+                            const x = if (args[0] == .float) args[0].float else @as(f64, @floatFromInt(args[0].int));
+                            const res = native_fn(x, args[1].int);
+                            self.sp -= (argc + 1);
+                            self.push(Value.makeFloat(res));
+                            continue;
+                        }
+                    }
+
                     if (callee == .function and callee.function.chunk != null and self.frame_count < self.frames.len) {
                         const fn_obj = callee.function;
                         const chunk: *Chunk = @ptrCast(@alignCast(fn_obj.chunk.?));

@@ -188,6 +188,9 @@ pub const PyFunction = struct {
     body_len: usize,
     closure_env: ?*anyopaque,
     chunk: ?*anyopaque = null,
+    jit_entry: ?*const anyopaque = null,
+    jit_kind: u8 = 0,
+    call_count: u32 = 0,
 };
 
 pub const PyIterator = struct {

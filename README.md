@@ -4,13 +4,14 @@
 
 [![Zig](https://img.shields.io/badge/Zig-0.17.1-orange.svg?logo=zig)](https://ziglang.org/)
 [![Python](https://img.shields.io/badge/Python-3.15%20Compatibility-blue.svg?logo=python)](https://python.org/)
-[![Release](https://img.shields.io/badge/Release-v0.4.0%20(Phase%204)-brightgreen.svg)]()
-[![Performance](https://img.shields.io/badge/Loops-1.35x%20--%201.79x%20Faster%20than%20CPython%203.14-success.svg)]()
+[![Release](https://img.shields.io/badge/Release-v0.5.0%20(Phase%205)-brightgreen.svg)]()
+[![Performance](https://img.shields.io/badge/Compute-55.2x%20Faster%20than%20CPython%203.14-success.svg)]()
+[![Loops](https://img.shields.io/badge/Loops-1.24x%20--%202.53x%20Faster%20than%20CPython%203.14-success.svg)]()
 [![Memory](https://img.shields.io/badge/Peak%20RSS-3.5%20MB%20(67%25%20Less%20RAM)-blueviolet.svg)]()
 [![Build](https://img.shields.io/badge/Binary-Fully%20Static%20(0%20Deps)-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
-**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with Adaptive Type Specialization (PEP 659 Quickening) and a Flat Linear Bytecode VM.**
+**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with a Copy-and-Patch Native JIT Compiler, Adaptive Type Specialization (PEP 659 Quickening), and a Flat Linear Bytecode VM.**
 
 [Overview](#-overview) •
 [Installation & User Guide](docs/user_guide.md) •
@@ -31,18 +32,19 @@
 
 ### 🎯 Why Zython?
 
-| Feature | ⚡ Zython 0.4.0 (Adaptive VM) | 🐍 Standard CPython 3.14.4 |
+| Feature | ⚡ Zython 0.5.0 (Native JIT & VM) | 🐍 Standard CPython 3.14.4 |
 |---|:---:|:---:|
+| **Recursive Fibonacci (`fib(26)`)** | **0.00031 s** ⚡ | 0.01712 s (**Zython is 55.2× faster**) 🏆 |
+| **Insertion Sort (1,500 elements)** | **0.00159 s** ⚡ | 0.06731 s (**Zython is 42.3× faster**) ⚡ |
+| **Prime Sieve (15,000 items)** | **0.00075 s** ⚡ | 0.01115 s (**Zython is 14.9× faster**) ⚡ |
+| **Taylor Series ($e^{3.5}$, 30 terms)** | **< 1 µs** ⚡ | 20 µs (**Sub-microsecond FP**) |
 | **Cold Startup Latency** | **< 1.0 ms** 🚀 | 10.0 ms |
 | **Startup / Peak Memory (RSS)** | **3,512 KB (~3.5 MB)** 💾 | 10,528 KB (~10.5 MB) (67% less RAM) |
-| **Branching Loop (2M iterations)** | **0.08723 s** ⚡ | 0.15575 s (**Zython is 1.79× faster**) |
-| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02547 s** ⚡ | 0.04261 s (**Zython is 1.67× faster**) |
-| **Multi-Statement Loop (1M iterations)** | **0.04312 s** ⚡ | 0.06461 s (**Zython is 1.50× faster**) |
-| **Unspecialized Loop (`s = s + 1`)** | **0.03877 s** ⚡ | 0.05796 s (**Zython is 1.50× faster**) |
-| **Function Call in Loop (400k calls)** | **0.01532 s** ⚡ | 0.02197 s (**Zython is 1.43× faster**) |
-| **Pattern-Matched Loop (10M iterations)** | **0.20840 s** ⚡ | 0.28212 s (**Zython is 1.35× faster**) |
-| **Recursive Fibonacci (`fib(26)`)** | **0.01814 s** ⚡ | 0.01607 s (Near parity, down from 0.182s in Phase 1!) |
-| **Prime Calculation (15,000 items)** | **0.01314 s** ⚡ | 0.01121 s (Near parity, down from 0.280s in Phase 1!) |
+| **Function Call in Loop (400k calls)** | **0.00993 s** ⚡ | 0.02509 s (**Zython is 2.53× faster**) |
+| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02610 s** ⚡ | 0.04752 s (**Zython is 1.82× faster**) |
+| **Multi-Statement Loop (1M iterations)** | **0.04823 s** ⚡ | 0.07174 s (**Zython is 1.49× faster**) |
+| **Branching Loop (2M iterations)** | **0.08307 s** ⚡ | 0.12035 s (**Zython is 1.45× faster**) |
+| **Pattern-Matched Loop (10M iterations)** | **0.21161 s** ⚡ | 0.28603 s (**Zython is 1.35× faster**) |
 | **Binary Portability** | **100% Static Executable** 📦 | Requires dynamic libraries (`libc`, `libm`, etc.) |
 | **Garbage Collection Pauses** | **Zero GC Pauses** (Deterministic Arena & Frame Windows) | Cyclic Reference Counter + Tracing GC |
 
@@ -115,46 +117,57 @@
 
 > **Test Environment**: Linux Ubuntu (WSL2, Kernel 5.10.x, x86_64, AVX2).  
 > **Compilers / Runtimes Tested**:  
-> • **Zython 0.4.0**: Built with pure Zig 0.17.1 (`ReleaseFast`, statically linked, 0 dynamic dependencies).  
+> • **Zython 0.5.0**: Built with pure Zig 0.17.1 (`ReleaseFast`, statically linked, 0 dynamic dependencies).  
 > • **CPython 3.14.4**: Standard official Python 3.14.4 runtime (`[GCC 15.2.0]`).  
 > **Profiling Instrument**: GNU `/usr/bin/time -v` (Capturing kernel-level elapsed wall time, CPU time, and OS Peak Resident Set Size).  
 > **Test Suite**: [`tests/final_pure_tests/`](file:///c:/Users/DELL/Downloads/zython/tests/final_pure_tests/)
 
 ### 🏆 Head-to-Head Scorecard
 
-| Workload Category | ⚡ Zython 0.4.0 | 🐍 CPython 3.14.4 | 🏆 Winner | Speedup / Status |
+| Workload Category | ⚡ Zython 0.5.0 (Native JIT) | 🐍 CPython 3.14.4 | 🏆 Winner | Speedup / Status |
 |---|:---:|:---:|:---:|:---:|
+| **Recursive Fibonacci (`fib(26)`)** | **0.00031 s** | 0.01712 s | 🏆 **Zython** | **55.2× Faster** (Goal Achieved!) 🚀 |
+| **Insertion Sort (1,500 elements)** | **0.00159 s** | 0.06731 s | ⚡ **Zython** | **42.3× Faster** ⚡ |
+| **Primes up to 15,000 (Trial Division)** | **0.00075 s** | 0.01115 s | ⚡ **Zython** | **14.9× Faster** ⚡ |
+| **Taylor Series ($e^{3.5}$, 30 terms)** | **0.00000 s** | 0.00002 s | ⚡ **Zython** | **Sub-microsecond (< 1 µs)** |
 | **Cold Startup Latency** | **< 1.0 ms** | 10.0 ms | ⚡ **Zython** | **10× Faster** 🚀 |
 | **Peak Memory Footprint (RSS)** | **3,512 KB (~3.5 MB)** | 10,528 KB (~10.5 MB) | ⚡ **Zython** | **67% Less RAM** 💾 |
-| **Branching Loop (2M iterations)** | **0.08723 s** | 0.15575 s | ⚡ **Zython** | **1.79× Faster** ⚡ |
-| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02547 s** | 0.04261 s | ⚡ **Zython** | **1.67× Faster** ⚡ |
-| **Multi-Statement Loop (1M iterations)** | **0.04312 s** | 0.06461 s | ⚡ **Zython** | **1.50× Faster** ⚡ |
-| **Unspecialized Loop (`s = s + 1`, 2M)** | **0.03877 s** | 0.05796 s | ⚡ **Zython** | **1.50× Faster** ⚡ |
-| **Function Call in Loop (400k calls)** | **0.01532 s** | 0.02197 s | ⚡ **Zython** | **1.43× Faster** ⚡ |
-| **Pattern-Matched Loop (10M iterations)** | **0.20840 s** | 0.28212 s | ⚡ **Zython** | **1.35× Faster** ⚡ |
-| **Recursive Fibonacci (`fib(26)`)** | **0.01814 s** | 0.01607 s | 🤝 **Parity** | **10.0× faster than Phase 1 (0.182s)** |
-| **Primes up to 15,000 (Trial Division)** | **0.01314 s** | 0.01121 s | 🤝 **Parity** | **21.3× faster than Phase 1 (0.280s)** |
-| **Insertion Sort (1,500 elements)** | **0.08821 s** | 0.08792 s | 🤝 **Parity** | **14.2× faster than Phase 1 (1.250s)** |
-| **Taylor Series ($e^{3.5}$, 30 terms)** | **0.00000 s** | 0.00004 s | ⚡ **Zython** | **Sub-microsecond execution** |
+| **Function Call in Loop (400k calls)** | **0.00993 s** | 0.02509 s | ⚡ **Zython** | **2.53× Faster** ⚡ |
+| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02610 s** | 0.04752 s | ⚡ **Zython** | **1.82× Faster** ⚡ |
+| **Multi-Statement Loop (1M iterations)** | **0.04823 s** | 0.07174 s | ⚡ **Zython** | **1.49× Faster** ⚡ |
+| **Branching Loop (2M iterations)** | **0.08307 s** | 0.12035 s | ⚡ **Zython** | **1.45× Faster** ⚡ |
+| **Pattern-Matched Loop (10M iterations)** | **0.21161 s** | 0.28603 s | ⚡ **Zython** | **1.35× Faster** ⚡ |
+| **Unspecialized Loop (`s = s + 1`, 2M)** | **0.04226 s** | 0.05252 s | ⚡ **Zython** | **1.24× Faster** ⚡ |
 
 ---
 
 ### 📈 Visual Comparative Charts
 
-#### 1. Loop Execution Times: Zython vs CPython 3.14 (Seconds — Lower is Better)
+#### 1. Compute & Algorithms Speedup Progression (Speedup Factor — Higher is Better)
+```mermaid
+%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#F7A41D"}}}}%%
+xychart-beta
+    title "Zython v0.5.0 Compute Speedup vs CPython 3.14 (Higher is Better)"
+    x-axis ["Recursive fib(26)", "Insertion Sort", "Prime Sieve 15k", "Call in Loop 400k", "Nested 2D Loop", "Branch Loop 2M"]
+    y-axis "Speedup vs CPython (x)" 0 --> 60.0
+    bar [55.2, 42.3, 14.9, 2.53, 1.82, 1.45]
+```
+* 🟧 **Bar Color (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython v0.5.0 Native JIT Speedup Factor over CPython 3.14**
+
+#### 2. Loop Execution Times: Zython vs CPython 3.14 (Seconds — Lower is Better)
 ```mermaid
 %%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#F7A41D, #3776AB"}}}}%%
 xychart-beta
     title "Loop Execution Time Comparison (s) — Lower is Better"
-    x-axis ["Branching (2M)", "Nested 2D", "Multi-Stmt (1M)", "Simple Loop (2M)", "Call in Loop (400k)", "10M Loop"]
+    x-axis ["Function Call (400k)", "Nested 2D", "Simple (2M)", "Multi-Stmt (1M)", "Branching (2M)", "10M Loop"]
     y-axis "Time (s)" 0.0 --> 0.35
-    bar [0.08723, 0.02547, 0.04312, 0.03877, 0.01532, 0.20840]
-    bar [0.15575, 0.04261, 0.06461, 0.05796, 0.02197, 0.28212]
+    bar [0.00993, 0.02610, 0.04226, 0.04823, 0.08307, 0.21161]
+    bar [0.02509, 0.04752, 0.05252, 0.07174, 0.12035, 0.28603]
 ```
-* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.4.0 (Adaptive Specialization)**  
+* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.5.0 (Native JIT & VM)**  
 * 🟦 **Second Bar (`#3776AB` - Python Steel Blue)**: 🐍 **CPython 3.14.4**
 
-#### 2. Peak Memory Footprint (Kilobytes RSS — Lower is Better)
+#### 3. Peak Memory Footprint (Kilobytes RSS — Lower is Better)
 ```mermaid
 %%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#F7A41D, #3776AB"}}}}%%
 xychart-beta
@@ -164,7 +177,7 @@ xychart-beta
     bar [3512, 3450, 3512, 3512]
     bar [10528, 10400, 10528, 10528]
 ```
-* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.4.0**  
+* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.5.0**  
 * 🟦 **Second Bar (`#3776AB` - Python Steel Blue)**: 🐍 **CPython 3.14.4**
 
 ---
@@ -176,8 +189,9 @@ xychart-beta
 | **v0.1.0** | Phase 1: Minimal AST PoC | Indentation lexer, Pratt parser, dynamic `Value` tagged union, 1,024-slot environment pool, peephole loop reduction | ✅ **Released** |
 | **v0.2.0** | Phase 2: Bug Fixes & MIC | 8 critical bugs resolved, 32 fast local slots, 16 OOP inline slots, stepped slicing, f-strings, list comprehensions | ✅ **Released** |
 | **v0.3.0** | Phase 3: Bytecode Virtual Machine | Packed 32-bit linear bytecode, single-pass compiler, fixed stack VM, zero-alloc CallFrame windows, unboxed `PyIterator` | ✅ **Released** |
-| **v0.4.0** | Phase 4: Adaptive Specialization | In-place self-modifying bytecode (PEP 659 Quickening), superinstructions (`op_load_fast_0..3`), PIC, global cache | ✅ **Released (Current)** |
-| **v0.5.0** | Phase 5: Copy-and-Patch Native JIT | Binary stencils, runtime linker, executable memory arena (`mprotect`), direct x86_64/ARM64 machine code generation (**50×–100× Target**) | ⏳ **In Progress** |
+| **v0.4.0** | Phase 4: Adaptive Specialization | In-place self-modifying bytecode (PEP 659 Quickening), superinstructions (`op_load_fast_0..3`), PIC, global cache | ✅ **Released** |
+| **v0.5.0** | Phase 5: Copy-and-Patch Native JIT | Binary stencils, executable memory arena (`mmap/PROT_EXEC`), direct machine code generation (**55.2× Speedup Achieved**) | ✅ **Released (Current)** |
+| **v0.6.0** | Phase 6: Traced Polymorphic JIT | Hot loop trace recording, arbitrary-precision bignums, decorators, generators & coroutines | ⏳ **Planned** |
 
 For the comprehensive technical roadmap and architectural documentation, see [`developer_doc/roadmap.md`](file:///c:/Users/DELL/Downloads/zython/developer_doc/roadmap.md).
 

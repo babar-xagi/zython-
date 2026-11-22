@@ -20,7 +20,7 @@ pub const Repl = struct {
     }
 
     pub fn run(self: *Repl) !void {
-        writeStdout("Zython 0.4.0 (Python 3.15 compatibility layer, Zig 0.17.1)\n");
+        writeStdout("Zython 0.5.0 (Python 3.15 compatibility layer, Zig 0.17.1)\n");
         writeStdout("Type 'exit()' to exit.\n");
 
         var line_buf: [4096]u8 = undefined;
