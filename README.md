@@ -1,23 +1,25 @@
-# ⚡ Zython: Next-Generation Python Interpreter in Zig 0.17
+# ⚡ Zython: Next-Generation Python Interpreter & Adaptive VM in Zig 0.17
 
 <div align="center">
 
 [![Zig](https://img.shields.io/badge/Zig-0.17.1-orange.svg?logo=zig)](https://ziglang.org/)
 [![Python](https://img.shields.io/badge/Python-3.15%20Compatibility-blue.svg?logo=python)](https://python.org/)
-[![Performance](https://img.shields.io/badge/Speed-Up%20to%2089M%C3%97%20Faster-brightgreen.svg)]()
-[![Memory](https://img.shields.io/badge/Peak%20RSS-1.5%20MB-blueviolet.svg)]()
+[![Release](https://img.shields.io/badge/Release-v0.4.0%20(Phase%204)-brightgreen.svg)]()
+[![Performance](https://img.shields.io/badge/Loops-1.35x%20--%201.79x%20Faster%20than%20CPython%203.14-success.svg)]()
+[![Memory](https://img.shields.io/badge/Peak%20RSS-3.5%20MB%20(67%25%20Less%20RAM)-blueviolet.svg)]()
 [![Build](https://img.shields.io/badge/Binary-Fully%20Static%20(0%20Deps)-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
-**A clean, memory-safe, ultra-high-throughput Python interpreter engineered from the ground up in pure Zig 0.17.**
+**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with Adaptive Type Specialization (PEP 659 Quickening) and a Flat Linear Bytecode VM.**
 
 [Overview](#-overview) •
 [Installation & User Guide](docs/user_guide.md) •
+[Developer Portal](developer_doc/README.md) •
 [Key Innovations](#-key-architectural-innovations) •
 [Benchmarks](#-real-world-empirical-benchmarks) •
+[Releases](#-release-milestones--roadmap) •
 [Language Support](#-language-features--compatibility) •
-[Quickstart](#-quickstart--installation) •
-[Reproduction](#-benchmark-reproduction)
+[Quickstart](#-quickstart--installation)
 
 </div>
 
@@ -25,19 +27,24 @@
 
 ## 🌟 Overview
 
-**Zython** is a complete, native Python interpreter written in **Zig 0.17.1** targeting Python 3.15 semantics. It replaces traditional runtime bloat with mechanical sympathy: unboxed tagged unions, zero-allocation environment pooling, inline data caching, direct method vectorcall dispatch, and LLVM register specialization.
+**Zython** is a complete, native Python runtime written in **Zig 0.17.1** targeting Python 3.15 semantics. It replaces traditional runtime bloat with mechanical sympathy: packed 32-bit linear bytecode instructions, self-modifying runtime adaptive specialization (PEP 659 Quickening), zero-allocation CallFrame stack mapping, dedicated register superinstructions, unboxed range stepping, Polymorphic Inline Caching (PIC), and a 128-entry global resolution cache.
 
 ### 🎯 Why Zython?
 
-| Feature | ⚡ Zython | 🐍 Standard CPython |
-|---|---|---|
-| **Cold Startup Latency** | **< 1.0 ms** 🚀 | 14.2 ms |
-| **Startup Memory Footprint** | **1,528 KB (~1.5 MB)** 💾 | 9,720 KB (~9.7 MB) |
-| **1-Billion Iteration Loop** | **0.000001 s** ⚡ | 67.185798 s |
-| **1-Billion Accumulation (`s += i`)** | **0.000001 s** ⚡ | 89.038157 s |
-| **Binary Portability** | **100% Static Executable** 📦 | Requires 5+ shared libraries (`libc`, `libm`, etc.) |
-| **Garbage Collection Pauses** | **Zero GC Pauses** (Deterministic Arena & Slot Pooling) | Cyclic Reference Counter + Mark-and-Sweep GC |
-| **Recursive Frame Overhead** | **1,024-Slot Zero-Alloc Environment Pool** | Heap `PyFrameObject` linked-list |
+| Feature | ⚡ Zython 0.4.0 (Adaptive VM) | 🐍 Standard CPython 3.14.4 |
+|---|:---:|:---:|
+| **Cold Startup Latency** | **< 1.0 ms** 🚀 | 10.0 ms |
+| **Startup / Peak Memory (RSS)** | **3,512 KB (~3.5 MB)** 💾 | 10,528 KB (~10.5 MB) (67% less RAM) |
+| **Branching Loop (2M iterations)** | **0.08723 s** ⚡ | 0.15575 s (**Zython is 1.79× faster**) |
+| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02547 s** ⚡ | 0.04261 s (**Zython is 1.67× faster**) |
+| **Multi-Statement Loop (1M iterations)** | **0.04312 s** ⚡ | 0.06461 s (**Zython is 1.50× faster**) |
+| **Unspecialized Loop (`s = s + 1`)** | **0.03877 s** ⚡ | 0.05796 s (**Zython is 1.50× faster**) |
+| **Function Call in Loop (400k calls)** | **0.01532 s** ⚡ | 0.02197 s (**Zython is 1.43× faster**) |
+| **Pattern-Matched Loop (10M iterations)** | **0.20840 s** ⚡ | 0.28212 s (**Zython is 1.35× faster**) |
+| **Recursive Fibonacci (`fib(26)`)** | **0.01814 s** ⚡ | 0.01607 s (Near parity, down from 0.182s in Phase 1!) |
+| **Prime Calculation (15,000 items)** | **0.01314 s** ⚡ | 0.01121 s (Near parity, down from 0.280s in Phase 1!) |
+| **Binary Portability** | **100% Static Executable** 📦 | Requires dynamic libraries (`libc`, `libm`, etc.) |
+| **Garbage Collection Pauses** | **Zero GC Pauses** (Deterministic Arena & Frame Windows) | Cyclic Reference Counter + Tracing GC |
 
 ---
 
@@ -59,88 +66,120 @@
                ┌────────────────────────────────────────────────────────┐
                │          Pratt Precedence AST Parser                   │
                │   • Single-pass recursive descent                      │
-               │   • AST inline caches (slot_idx & cached_val)          │
+               │   • F-strings, bare tuple unpacking, list comp         │
                └───────────────────────────┬────────────────────────────┘
                                            │
                                            ▼
                ┌────────────────────────────────────────────────────────┐
-               │              Zython High-Speed Evaluator               │
+               │      Single-Pass AST-to-Bytecode Compiler              │
+               │   • Scope depth tracking & local slot assignment       │
+               │   • Forward jump patching for loops and branches       │
+               │   • Superinstruction emission (op_load_fast_0..3)     │
+               └───────────────────────────┬────────────────────────────┘
+                                           │
+                                           ▼
+               ┌────────────────────────────────────────────────────────┐
+               │         High-Speed Linear Virtual Machine (VM)         │
                │  ┌──────────────────────┐   ┌───────────────────────┐  │
-               │  │ Zero-Alloc Env Pool  │   │ Register Specializer  │  │
-               │  │ (1024-entry recycle) │   │ (LLVM SIMD unrolling) │  │
+               │  │ Adaptive Quickening  │   │ Direct Register Slots │  │
+               │  │ (PEP 659 Rewriting)  │   │ (base_sp stack window)│  │
                │  └──────────────────────┘   └───────────────────────┘  │
                │  ┌──────────────────────┐   ┌───────────────────────┐  │
-               │  │ Direct Method Call   │   │ Compact String Dict   │  │
-               │  │ (No BoundMethod)     │   │ (O(1) Robin-Hood Map) │  │
+               │  │ Polymorphic IC (PIC) │   │ Unboxed Range Stepper │  │
+               │  │ (Cached class slots) │   │ (Zero-alloc iterator) │  │
+               │  └──────────────────────┘   └───────────────────────┘  │
+               │  ┌──────────────────────┐   ┌───────────────────────┐  │
+               │  │ 128-Slot Global Cache│   │ Deopt Fail-Safe Guards│  │
+               │  │ (fib / builtins)     │   │ (Instant fallback)    │  │
                │  └──────────────────────┘   └───────────────────────┘  │
                └────────────────────────────────────────────────────────┘
 ```
 
-1. **AST Inline Caching (`LOAD_FAST` & `LOAD_GLOBAL` Equivalent)**:
-   AST variable nodes remember their slot offset within the active activation frame. Access to variables resolves in **1 CPU instruction** via direct cache offset, bypassing string comparisons and hash lookups entirely.
-2. **Zero-Allocation Environment Pooling**:
-   Function calls reuse activation records from a 1,024-element pre-allocated pool (`env_pool`). Closures that outlive their parent frames are tracked via `.markEscaped()`, preventing recycling while non-escaping functions enjoy 100% zero-heap-allocation calls.
-3. **Direct Method Dispatch (`LOAD_METHOD` / `CALL_METHOD`)**:
-   Method calls like `obj.compute()`, `list.append()`, and `dict.get()` bypass the creation of temporary heap-allocated `PyBoundMethod` instances, invoking native Zig buffer operations directly on the stack.
-4. **Hardware-Vectorized Register Loops**:
-   Arithmetic ranges (`for i in range(...)` and `while i < limit`) are recognized and unrolled by the LLVM backend into CPU register arithmetic, allowing **1 Billion loop iterations to complete in under 2 microseconds**.
+1. **Adaptive Type Specialization (PEP 659 Quickening)**:
+   Generic opcodes (`op_add`, `op_sub`, `op_mul`, `op_eq`, `op_lt`, etc.) profile operand types dynamically. Upon observing homogenous types, the VM overwrites `frame.chunk.code.items[frame.ip - 1].op` directly in-place with specialized 1-cycle opcodes (`op_add_int`, `op_lt_int`, etc.).
+2. **Register Superinstructions for Fast Slots 0..3**:
+   Dedicated zero-argument opcodes (`op_load_fast_0..3`, `op_store_fast_0..3`) eliminate argument decoding and variable offset calculations, executing direct CPU register-to-memory moves.
+3. **Unboxed Range Stepper & Contiguous List Indexing**:
+   - `op_for_iter_range` directly increments loop counters in native registers (`r.current += r.step`), avoiding virtual method calls and heap allocations.
+   - `op_get_subscript_list` and `op_set_subscript_list` execute direct contiguous slice indexing (`items[idx] = val`).
+4. **Polymorphic Inline Caching (PIC)**:
+   Attribute lookups (`point.x`, `self.val`) specialize into `op_get_attr_cached`, verifying class shape with a single pointer equality check before reading directly from `inline_slots`.
+5. **128-Entry Direct Table Global Cache**:
+   Caches resolved pointers for hot recursive functions and builtins (`fib`, `len`, `range`), slashing recursive call overhead.
+6. **Zero-Allocation Stack Mapping**:
+   Function calls reuse activation records directly within the contiguous stack (`base_sp`), avoiding dynamic heap frame allocations entirely.
 
 ---
 
 ## 📊 Real-World Empirical Benchmarks
 
-> **Test Environment**: Linux (Ubuntu on WSL2, Kernel 5.10.x / `x86_64-linux-gnu`).  
-> **Compiler**: `Zig 0.17.1` (`-Doptimize=ReleaseFast`).  
-> **Comparison Baseline**: `Python 3.14.4 [GCC 15.2.0]` / Official 3.15 Dev Branch.  
-> **Profiling Instrument**: GNU `/usr/bin/time -v` (Capturing exact wall-clock time and OS Peak RSS).
+> **Test Environment**: Linux Ubuntu (WSL2, Kernel 5.10.x, x86_64, AVX2).  
+> **Compilers / Runtimes Tested**:  
+> • **Zython 0.4.0**: Built with pure Zig 0.17.1 (`ReleaseFast`, statically linked, 0 dynamic dependencies).  
+> • **CPython 3.14.4**: Standard official Python 3.14.4 runtime (`[GCC 15.2.0]`).  
+> **Profiling Instrument**: GNU `/usr/bin/time -v` (Capturing kernel-level elapsed wall time, CPU time, and OS Peak Resident Set Size).  
+> **Test Suite**: [`tests/final_pure_tests/`](file:///c:/Users/DELL/Downloads/zython/tests/final_pure_tests/)
 
-### 🏆 Scorecard
+### 🏆 Head-to-Head Scorecard
 
-| Category / Benchmark | ⚡ Zython (Zig) | 🐍 CPython 3 | 🏆 Winner | Speedup Factor |
-|---|---|---|:---:|---|
-| **Cold Startup Latency** | **< 1.0 ms** | 14.2 ms | ⚡ **Zython** | **14.2x Faster** 🚀 |
-| **Cold Startup Memory (Peak RSS)** | **1,528 KB (~1.5 MB)** | 9,720 KB (~9.7 MB) | ⚡ **Zython** | **6.4x Less RAM** 💾 |
-| **1,000,000 While Loop** | **0.000001 s** | 0.052227 s | ⚡ **Zython** | **52,227x Faster** ⚡ |
-| **10,000,000 For Loop** | **0.000001 s** | 0.351636 s | ⚡ **Zython** | **351,636x Faster** ⚡ |
-| **50,000,000 For Loop** | **0.000001 s** | 1.400955 s | ⚡ **Zython** | **1,400,000x Faster** ⚡ |
-| **100,000,000 Iteration Loop** | **0.000002 s** | 6.743852 s | ⚡ **Zython** | **3,371,926x Faster** ⚡ |
-| **100,000,000 While Loop** | **0.000001 s** | 12.996967 s | ⚡ **Zython** | **12,996,967x Faster** ⚡ |
-| **💥 1 BILLION Iteration Loop** | **0.000001 s** | 67.185798 s | ⚡ **Zython** | **67,185,798x Faster** 💥 |
-| **💥 1 BILLION Accumulation (`s += i`)** | **0.000001 s** | 89.038157 s | ⚡ **Zython** | **89,038,157x Faster** 💥 |
-| **Billion Loop Peak RSS** | **1,528 KB (~1.5 MB)** | 10,240 KB (~10.2 MB) | ⚡ **Zython** | **6.7x Less RAM** 💾 |
-| **Comprehensive Benchmark Suite** | **0.37 s** | 2.03 s | ⚡ **Zython** | **5.5x Faster Overall** 🚀 |
-| **Binary Portability** | **Fully Static (`ldd`: static)** | Dynamic (5+ `.so` deps) | ⚡ **Zython** | Zero dependencies 📦 |
+| Workload Category | ⚡ Zython 0.4.0 | 🐍 CPython 3.14.4 | 🏆 Winner | Speedup / Status |
+|---|:---:|:---:|:---:|:---:|
+| **Cold Startup Latency** | **< 1.0 ms** | 10.0 ms | ⚡ **Zython** | **10× Faster** 🚀 |
+| **Peak Memory Footprint (RSS)** | **3,512 KB (~3.5 MB)** | 10,528 KB (~10.5 MB) | ⚡ **Zython** | **67% Less RAM** 💾 |
+| **Branching Loop (2M iterations)** | **0.08723 s** | 0.15575 s | ⚡ **Zython** | **1.79× Faster** ⚡ |
+| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02547 s** | 0.04261 s | ⚡ **Zython** | **1.67× Faster** ⚡ |
+| **Multi-Statement Loop (1M iterations)** | **0.04312 s** | 0.06461 s | ⚡ **Zython** | **1.50× Faster** ⚡ |
+| **Unspecialized Loop (`s = s + 1`, 2M)** | **0.03877 s** | 0.05796 s | ⚡ **Zython** | **1.50× Faster** ⚡ |
+| **Function Call in Loop (400k calls)** | **0.01532 s** | 0.02197 s | ⚡ **Zython** | **1.43× Faster** ⚡ |
+| **Pattern-Matched Loop (10M iterations)** | **0.20840 s** | 0.28212 s | ⚡ **Zython** | **1.35× Faster** ⚡ |
+| **Recursive Fibonacci (`fib(26)`)** | **0.01814 s** | 0.01607 s | 🤝 **Parity** | **10.0× faster than Phase 1 (0.182s)** |
+| **Primes up to 15,000 (Trial Division)** | **0.01314 s** | 0.01121 s | 🤝 **Parity** | **21.3× faster than Phase 1 (0.280s)** |
+| **Insertion Sort (1,500 elements)** | **0.08821 s** | 0.08792 s | 🤝 **Parity** | **14.2× faster than Phase 1 (1.250s)** |
+| **Taylor Series ($e^{3.5}$, 30 terms)** | **0.00000 s** | 0.00004 s | ⚡ **Zython** | **Sub-microsecond execution** |
 
 ---
 
-### 📈 Visual Benchmarks
+### 📈 Visual Comparative Charts
 
-#### 1. Loop Execution Scaling (100M to 1 BILLION Iterations in Seconds)
+#### 1. Loop Execution Times: Zython vs CPython 3.14 (Seconds — Lower is Better)
 ```mermaid
+%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#F7A41D, #3776AB"}}}}%%
 xychart-beta
-    title "100M & 1-Billion Iteration Execution Time (s) — Lower is Better"
-    x-axis ["100M Loop (Zython)", "100M Loop (CPython)", "1B Loop (Zython)", "1B Loop (CPython)", "1B Acc (Zython)", "1B Acc (CPython)"]
-    y-axis "Time (seconds)" 0 --> 100
-    bar [0.00, 6.74, 0.00, 67.19, 0.00, 89.04]
+    title "Loop Execution Time Comparison (s) — Lower is Better"
+    x-axis ["Branching (2M)", "Nested 2D", "Multi-Stmt (1M)", "Simple Loop (2M)", "Call in Loop (400k)", "10M Loop"]
+    y-axis "Time (s)" 0.0 --> 0.35
+    bar [0.08723, 0.02547, 0.04312, 0.03877, 0.01532, 0.20840]
+    bar [0.15575, 0.04261, 0.06461, 0.05796, 0.02197, 0.28212]
 ```
+* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.4.0 (Adaptive Specialization)**  
+* 🟦 **Second Bar (`#3776AB` - Python Steel Blue)**: 🐍 **CPython 3.14.4**
 
-#### 2. Operating System Peak Memory Footprint (KB RSS)
+#### 2. Peak Memory Footprint (Kilobytes RSS — Lower is Better)
 ```mermaid
+%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#F7A41D, #3776AB"}}}}%%
 xychart-beta
-    title "Peak Resident Set Size (KB RSS) — Lower is Better"
-    x-axis ["Zython Startup", "CPython Startup", "Zython 1B Loop", "CPython 1B Loop"]
-    y-axis "Peak RSS (KB)" 0 --> 12000
-    bar [1528, 9720, 1528, 10240]
+    title "OS Peak Resident Set Size (KB RSS) — Lower is Better"
+    x-axis ["Edge Cases Suite", "Data Structures Suite", "Algorithms Suite", "Loop Mechanics Suite"]
+    y-axis "Peak RAM (KB)" 0 --> 12000
+    bar [3512, 3450, 3512, 3512]
+    bar [10528, 10400, 10528, 10528]
 ```
+* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.4.0**  
+* 🟦 **Second Bar (`#3776AB` - Python Steel Blue)**: 🐍 **CPython 3.14.4**
 
-#### 3. Total End-to-End Suite Wall Time (Seconds)
-```mermaid
-xychart-beta
-    title "Comprehensive Suite Elapsed Time (s) — Lower is Better"
-    x-axis ["Zython (Zig)", "CPython 3 (Python)"]
-    y-axis "Total Wall Time (s)" 0.0 --> 2.5
-    bar [0.37, 2.03]
-```
+---
+
+## 🗺️ Release Milestones & Roadmap
+
+| Release | Milestone | Key Deliverables & Systems | Status |
+|:---:|---|---|:---:|
+| **v0.1.0** | Phase 1: Minimal AST PoC | Indentation lexer, Pratt parser, dynamic `Value` tagged union, 1,024-slot environment pool, peephole loop reduction | ✅ **Released** |
+| **v0.2.0** | Phase 2: Bug Fixes & MIC | 8 critical bugs resolved, 32 fast local slots, 16 OOP inline slots, stepped slicing, f-strings, list comprehensions | ✅ **Released** |
+| **v0.3.0** | Phase 3: Bytecode Virtual Machine | Packed 32-bit linear bytecode, single-pass compiler, fixed stack VM, zero-alloc CallFrame windows, unboxed `PyIterator` | ✅ **Released** |
+| **v0.4.0** | Phase 4: Adaptive Specialization | In-place self-modifying bytecode (PEP 659 Quickening), superinstructions (`op_load_fast_0..3`), PIC, global cache | ✅ **Released (Current)** |
+| **v0.5.0** | Phase 5: Copy-and-Patch Native JIT | Binary stencils, runtime linker, executable memory arena (`mprotect`), direct x86_64/ARM64 machine code generation (**50×–100× Target**) | ⏳ **In Progress** |
+
+For the comprehensive technical roadmap and architectural documentation, see [`developer_doc/roadmap.md`](file:///c:/Users/DELL/Downloads/zython/developer_doc/roadmap.md).
 
 ---
 
@@ -148,7 +187,7 @@ xychart-beta
 
 ### 🔹 Core Data Types
 - **Unboxed Primitives**: `int` (64-bit unboxed integers), `float` (IEEE-754 64-bit), `bool`, `NoneType`.
-- **Heap Structures**: `str` (UTF-8 slices & formatters), `list` (amortized dynamic arrays), `tuple` (immutable sequences), `dict` (compact hash map with string indexing), `set` (unique sets), `range` (lazy arithmetic iterables).
+- **Collections**: `str` (UTF-8 slices & formatters), `list` (amortized dynamic arrays), `tuple` (immutable sequences & bare comma unpacking), `dict` (compact hash map with string indexing), `set` (unique sets with $O(1)$ membership), `range` (lazy arithmetic iterables).
 
 ### 🔹 Functions & Scopes
 - Arbitrary recursion with pooled activation records.
@@ -156,16 +195,17 @@ xychart-beta
 - Variadic arguments (`*args`, `**kwargs`).
 - Closures with automatic parent escape tracking.
 - Lambda expressions (`lambda x: x * 2`).
+- List comprehensions with conditional filtering (`[x * 2 for x in r if x % 2 == 0]`).
 
 ### 🔹 Object-Oriented Programming (OOP)
 - Class definitions (`class MyClass:`).
 - Instance initializers (`def __init__(self, ...):`).
-- Bound method invocation with inline attribute cache (`[8]FieldSlot`).
+- Bound method invocation with 16 inline attribute slots (`inline_slots: [16]FieldSlot`).
 - Single and multi-level inheritance hierarchies (`class Derived(Base):`).
 - Runtime type queries: `type(obj)` and `isinstance(obj, (ClassA, ClassB))`.
 
 ### 🔹 Exception Handling & Control Flow
-- `try` / `except ... as ...` / `finally` blocks.
+- `try` / `except ... as ...` / `finally` blocks with error type matching.
 - `raise Exception("message")` and `assert condition, "error"`.
 - Loops with nested `break` and `continue`.
 
@@ -198,9 +238,10 @@ The standalone binary will be generated at `./zig-out/bin/zython`.
 ./zig-out/bin/zython
 ```
 ```python
-Zython 0.1.0 (Python 3.15 compatibility layer, Zig 0.17.1)
+Zython 0.4.0 (Python 3.15 compatibility layer, Zig 0.17.1)
 Type 'exit()' to exit.
 >>> [x * x for x in range(5)]
+[0, 1, 4, 9, 16]
 >>> def factorial(n):
 ...     return 1 if n <= 1 else n * factorial(n - 1)
 ... 
@@ -214,28 +255,9 @@ Type 'exit()' to exit.
 # Execute one-liners
 ./zig-out/bin/zython -c "import math; print('Euler constant e =', math.e)"
 
-# Run Python files
-./zig-out/bin/zython tests/test_basic.py
-./zig-out/bin/zython tests/test_classes.py
-```
-
----
-
-## 🔬 Benchmark Reproduction
-
-Execute the real-world benchmarks on your own machine:
-
-```bash
-# Run unit test suite (100% pass)
-zig build test --summary all
-
-# Run the 1-Billion loop challenge on both interpreters
-./zig-out/bin/zython tests/billion_loop_bench.py
-python3 tests/billion_loop_bench.py
-
-# Run comprehensive test suite with memory telemetry
-/usr/bin/time -v ./zig-out/bin/zython tests/comprehensive_bench.py
-/usr/bin/time -v python3 tests/comprehensive_bench.py
+# Run test suite
+./zig-out/bin/zython tests/final_pure_tests/01_compute_and_algorithms.py
+./zig-out/bin/zython tests/final_pure_tests/04_loop_mechanics_ground_reality.py
 ```
 
 ---
@@ -246,7 +268,15 @@ python3 tests/billion_loop_bench.py
 zython-/
 ├── build.zig              # Zig 0.17 build configuration
 ├── build.zig.zon          # Zig package manifest
-├── benchmark.md           # Full empirical performance benchmark document
+├── final_summary.md       # Ground reality empirical benchmark report
+├── BUGS.md                # Forensic bug resolution and technical audit
+├── developer_doc/         # Comprehensive architectural documentation
+│   ├── README.md          # Architecture portal and navigation index
+│   ├── 01_baseline_architecture_v0.1.0.md  # Phase 1 AST PoC analysis
+│   ├── 02_current_architecture_v0.2.0.md   # Phase 2 Optimized AST & MIC
+│   ├── 03_future_architecture_v0.3.0_to_v0.5.0.md # Path to 50x Copy-and-Patch JIT
+│   ├── achievements.md    # Master achievements and bug resolution scorecard
+│   └── roadmap.md         # Multi-phase engineering roadmap and completion matrix
 ├── src/
 │   ├── main.zig           # CLI entry point, argument parsing, test blocks
 │   ├── repl.zig           # Interactive REPL shell
@@ -254,17 +284,20 @@ zython-/
 │   ├── lexer.zig          # Indentation-aware lexer (INDENT/DEDENT)
 │   ├── ast.zig            # AST nodes with inline cache metadata
 │   ├── parser.zig         # Pratt precedence expression & statement parser
+│   ├── bytecode.zig       # 32-bit compact bytecode chunk, opcodes, inline cache
+│   ├── compiler.zig       # Single-pass AST-to-bytecode compiler & superinstructions
+│   ├── vm.zig             # Stack virtual machine with adaptive PEP 659 quickening
 │   ├── value.zig          # Tagged union Value & runtime data structures
 │   ├── environment.zig    # Scope resolution, fast slots & closure tracking
 │   ├── builtins.zig       # Standard builtins and math/time/sys modules
-│   └── interpreter.zig    # High-speed AST evaluator with loop specialization
+│   └── interpreter.zig    # High-speed AST evaluator and fallback runner
 └── tests/
-    ├── test_basic.py          # Arithmetic, bitwise, strings
-    ├── test_control.py        # If/elif/else, while, for loops
-    ├── test_functions.py      # Recursion, closures, lambdas, defaults
-    ├── test_classes.py        # OOP inheritance, methods, isinstance
-    ├── comprehensive_bench.py # Multi-workload benchmark suite
-    └── billion_loop_bench.py  # 100M & 1-Billion iteration challenge
+    └── final_pure_tests/  # Real-world benchmark and ground-reality suite
+        ├── 01_compute_and_algorithms.py
+        ├── 02_data_structures_and_collections.py
+        ├── 03_oop_polymorphism.py
+        ├── 04_loop_mechanics_ground_reality.py
+        └── 05_edge_cases_and_issues.py
 ```
 
 ---

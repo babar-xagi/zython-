@@ -101,55 +101,29 @@ pub const Value = packed struct {
 
 ---
 
-### ⚡ Pillar 2: Flat Linear Bytecode VM & Computed Gotos (v0.3.0)
-Replace recursive AST traversal with a flat, contiguous instruction array.
+### ⚡ Pillar 2: Flat Linear Bytecode VM & Compact Instructions (v0.3.0) — ✅ DELIVERED
+*Status: 100% Implemented & Verified in Phase 3 (`src/bytecode.zig`, `src/compiler.zig`, `src/vm.zig`)*
 
-```zig
-pub const Opcode = enum(u8) {
-    load_const,
-    load_fast,
-    store_fast,
-    binary_add,
-    binary_sub,
-    compare_lt,
-    jump_if_false,
-    jump_forward,
-    call_fn,
-    return_val,
-};
-
-pub const Instruction = packed struct {
-    op: Opcode,
-    dst: u8,
-    arg1: u8,
-    arg2: u8,
-};
-```
-
-#### Why Register-Based VM Beats Stack VM:
-Unlike CPython's stack machine (which pushes and pops operands for every add), Zython will adopt a **3-address register bytecode format** (similar to LuaJIT):
-* `dst = arg1 + arg2` executes in a single bytecode instruction.
-* Eliminates ~40% of instruction count compared to CPython bytecode.
-* Employs **direct-threaded code dispatch** (jumping directly to the address of the next opcode handler via computed gotos, bypassing `switch` bounds checks).
+Replaced recursive AST traversal with a flat, contiguous 32-bit instruction array and contiguous stack-frame execution.
 
 ---
 
-### 🎯 Pillar 3: Polymorphic Inline Caching (PIC) & Self-Healing Bytecodes (v0.4.0)
+### 🎯 Pillar 3: Polymorphic Inline Caching (PIC) & Self-Modifying Quickening (v0.4.0) — ✅ DELIVERED
+*Status: 100% Implemented & Verified in Phase 4 (PEP 659 Adaptive Specialization)*
+
 Python variables are dynamically typed, but 99.9% of loop bodies repeat the exact same types.
 
-1. In Tier 1, an unspecialized `BINARY_ADD` checks types dynamically.
-2. If both operands are integers 3 times consecutively, the interpreter rewrites the instruction in-memory to **`BINARY_ADD_INT_INT`**.
-3. `BINARY_ADD_INT_INT` executes directly:
-   ```zig
-   // 1 single CPU cycle!
-   regs[inst.dst] = Value.makeInt(regs[inst.arg1].asInt() + regs[inst.arg2].asInt());
-   ```
-4. If a type guard fails (e.g. float or string is supplied), the opcode deoptimizes back to generic `BINARY_ADD`.
+1. In Tier 1, an unspecialized `op_add` checks types dynamically.
+2. If both operands are integers, the interpreter rewrites the instruction in-memory to **`op_add_int`**.
+3. `op_add_int` executes directly in 1 single CPU cycle (`a.int +% b.int`).
+4. If a type guard fails (e.g. float or string is supplied), the opcode deoptimizes back to generic `op_add`.
+5. Superinstructions (`op_load_fast_0..3`, `op_store_fast_0..3`) execute direct register-to-memory moves.
+6. Unboxed range stepping (`op_for_iter_range`) and attribute caching (`op_get_attr_cached`) eliminate method call penalties.
 
 ---
 
-### 🔥 Pillar 4: Copy-and-Patch Native JIT Compiler (v0.5.0)
-To achieve **50× faster execution** than CPython on recursive algorithms (`fib(26)`) and mathematical sorting, the interpreter loop must be completely bypassed in favor of raw machine instructions.
+### 🔥 Pillar 4: Copy-and-Patch Native JIT Compiler (v0.5.0) — ⏳ TARGET PHASE 5
+To achieve **50× to 100× faster execution** than CPython on recursive algorithms (`fib(26)`) and mathematical sorting, the interpreter loop must be completely bypassed in favor of raw machine instructions.
 
 **Copy-and-Patch JIT** (introduced by Haoran Xu & Fredrik Kjolstad and adopted in CPython 3.13 JIT):
 1. Write small, fast assembly stencils in Zig.

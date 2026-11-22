@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Zython Logo Banner](https://img.shields.io/badge/Zython-Python%20in%20Zig-orange?style=for-the-badge&logo=zig)
-![Version](https://img.shields.io/badge/Version-v0.1.0-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v0.4.0-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 **The definitive operational manual for installing, building, utilizing, and extending Zython.**
