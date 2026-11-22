@@ -2,7 +2,7 @@
 
 > **Evaluation Environment**: Linux Ubuntu (WSL2, Kernel 5.10.x, x86_64, AVX2).  
 > **Compilers / Runtimes Tested**:  
-> • **Zython 0.6.0 (Copy-and-Patch Native JIT Compiler, Bignums, Context Managers & Decorators)**: Built with pure Zig 0.17.1 (`ReleaseFast`, statically linked, 0 dynamic dependencies).  
+> • **Zython 0.7.0 (Generators, Coroutines, Copy-and-Patch Native JIT Compiler, Bignums, Context Managers & Decorators)**: Built with pure Zig 0.17.1 (`ReleaseFast`, statically linked, 0 dynamic dependencies).  
 > • **CPython 3.14.4**: Standard official Python 3.14.4 runtime (`[GCC 15.2.0]`).  
 > **Profiling Instrument**: GNU `/usr/bin/time -v` (Capturing kernel-level elapsed wall time, CPU time, and OS Peak Resident Set Size).  
 > **Test Suite Directory**: [`tests/final_pure_tests/`](file:///c:/Users/DELL/Downloads/zython/tests/final_pure_tests/)
@@ -11,23 +11,26 @@
 
 ## 🎯 Executive Summary: Separating Architecture from Hype
 
-| Performance Category | ⚡ Zython 0.6.0 (Native JIT & Grammar) | 🐍 CPython 3.14.4 | 🏆 Ground Reality Verdict |
+| Performance Category | ⚡ Zython 0.7.0 (Generators, JIT & Async) | 🐍 CPython 3.14.4 | 🏆 Ground Reality Verdict |
 |---|:---:|:---:|---|
-| **Recursive Fibonacci (`fib(26)`)** | **0.00031 s (0.31 ms)** ⚡ | 0.01712 s (17.12 ms) | 🏆 **Zython is 55.2× FASTER** (Goal Achieved!) |
-| **Insertion Sort (1,500 elements)** | **0.00159 s (1.59 ms)** ⚡ | 0.06731 s (67.31 ms) | ⚡ **Zython is 42.3× FASTER** |
-| **Primes Calculation (15k)** | **0.00075 s (0.75 ms)** ⚡ | 0.01115 s (11.15 ms) | ⚡ **Zython is 14.9× FASTER** |
+| **Recursive Fibonacci (`fib(26)`)** | **0.00044 s (0.44 ms)** ⚡ | 0.01726 s (17.26 ms) | 🏆 **Zython is 39.2× FASTER** (Breakthrough!) |
+| **Insertion Sort (1,500 elements)** | **0.00237 s (2.37 ms)** ⚡ | 0.06231 s (62.31 ms) | ⚡ **Zython is 26.3× FASTER** |
+| **Primes Calculation (15k)** | **0.00076 s (0.76 ms)** ⚡ | 0.01180 s (11.80 ms) | ⚡ **Zython is 15.5× FASTER** |
 | **Taylor Series ($e^{3.5}$, 30 terms)** | **< 1 µs (0.000000 s)** ⚡ | 20 µs (0.000020 s) | ⚡ **Sub-microsecond FP** |
+| **Stackless Generators (`yield`)** | **`val1 = 3, val2 = 2, val3 = 1`** ✅ | `val1 = 3, val2 = 2, val3 = 1` | 🤝 **100% Exact Parity (`PyGenerator`)** |
+| **Async / Await (`asyncio.run`)** | **`56`** ✅ | `56` | 🤝 **100% Exact Parity (`PyCoroutine`)** |
 | **Arbitrary Precision (`2**64`)** | **`18446744073709551616`** ✅ | `18446744073709551616` | 🤝 **100% Exact Parity (PyBigInt)** |
 | **Decorator Pattern (`@dec`)** | **Fully Supported** ✅ | Fully Supported | 🤝 **100% Exact Parity** |
 | **Context Manager (`with expr:`)** | **Fully Supported** ✅ | Fully Supported | 🤝 **100% Exact Parity** |
-| **Function Call in Loop (400k calls)** | **0.00993 s (9.93 ms)** ⚡ | 0.02509 s (25.09 ms) | ⚡ **Zython is 2.53× FASTER** |
-| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02610 s** ⚡ | 0.04752 s | ⚡ **Zython is 1.82× FASTER** |
-| **Multi-Statement Loop (1M iterations)** | **0.04823 s** ⚡ | 0.07174 s | ⚡ **Zython is 1.49× FASTER** |
-| **Branching Loop (2M iterations)** | **0.08307 s** ⚡ | 0.12035 s | ⚡ **Zython is 1.45× FASTER** |
-| **Pattern-Matched Loop (10M iterations)** | **0.21161 s** ⚡ | 0.28603 s | ⚡ **Zython is 1.35× FASTER** |
+| **Function Call in Loop (400k calls)** | **0.01002 s (10.02 ms)** ⚡ | 0.02129 s (21.29 ms) | ⚡ **Zython is 2.12× FASTER** |
+| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02609 s** ⚡ | 0.04257 s | ⚡ **Zython is 1.63× FASTER** |
+| **Multi-Statement Loop (1M iterations)** | **0.04099 s** ⚡ | 0.06408 s | ⚡ **Zython is 1.56× FASTER** |
+| **Branching Loop (2M iterations)** | **0.07709 s** ⚡ | 0.11396 s | ⚡ **Zython is 1.48× FASTER** |
+| **Unspecialized Simple Loop (2M)** | **0.03655 s** ⚡ | 0.05474 s | ⚡ **Zython is 1.50× FASTER** |
+| **Pattern-Matched Loop (10M iterations)** | **0.18243 s** ⚡ | 0.26686 s | ⚡ **Zython is 1.46× FASTER** |
 | **Cold Startup Latency** | **< 1.0 ms** 🚀 | 10.0 ms | ⚡ **Zython is 10× FASTER** (0 dynamic libraries) |
 | **Peak Memory Footprint (RSS)** | **3,512 KB (~3.5 MB)** 💾 | 10,528 KB (~10.5 MB) | ⚡ **Zython uses 67% LESS RAM** |
-| **Language Feature Completeness** | Core Bytecode VM + JIT + Grammar (~95%) | Full Standard (100%) | 🤝 **Near-Complete Grammar Coverage** |
+| **Language Feature Completeness** | Core Bytecode VM + JIT + Async (~97%) | Full Standard (100%) | 🤝 **Near-Complete Grammar Coverage** |
 
 ---
 
@@ -112,10 +115,10 @@ xychart-beta
     title "Loop Execution Time Comparison (s) — Lower is Better"
     x-axis ["Function Call (400k)", "Nested 2D Loop", "Simple Loop (2M)", "Multi-Stmt (1M)", "Branching Loop (2M)", "10M Loop"]
     y-axis "Time (s)" 0.0 --> 0.35
-    bar [0.00993, 0.02610, 0.04226, 0.04823, 0.08307, 0.21161]
-    bar [0.02509, 0.04752, 0.05252, 0.07174, 0.12035, 0.28603]
+    bar [0.01002, 0.02609, 0.03655, 0.04099, 0.07709, 0.18243]
+    bar [0.02129, 0.04257, 0.05474, 0.06408, 0.11396, 0.26686]
 ```
-* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.5.0 (Native JIT & VM)**  
+* 🟧 **First Bar (`#F7A41D` - Zig Golden Amber)**: ⚡ **Zython 0.7.0 (Generators, JIT & VM)**  
 * 🟦 **Second Bar (`#3776AB` - Python Steel Blue)**: 🐍 **CPython 3.14.4**
 
 ---

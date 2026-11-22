@@ -15,6 +15,8 @@ const PyInstance = value_mod.PyInstance;
 const PyBoundMethod = value_mod.PyBoundMethod;
 const PyModule = value_mod.PyModule;
 const PyBigInt = value_mod.PyBigInt;
+const PyGenerator = value_mod.PyGenerator;
+const PyCoroutine = value_mod.PyCoroutine;
 const DictEntry = value_mod.DictEntry;
 const ast_mod = @import("ast.zig");
 const Expr = ast_mod.Expr;
@@ -49,6 +51,7 @@ pub const Interpreter = struct {
     env_pool: [2048]*Environment = undefined,
     env_pool_top: usize = 0,
     return_value: Value = .none,
+    current_yield_gen: ?*PyGenerator = null,
     vm: VM = undefined,
     jit: JitEngine = undefined,
 
@@ -92,6 +95,9 @@ pub const Interpreter = struct {
         const mod_sys = try builtins_mod.makeSysModule(allocator, cli_args);
         try self.modules.put("sys", mod_sys);
 
+        const mod_asyncio = try builtins_mod.makeAsyncioModule(allocator);
+        try self.modules.put("asyncio", mod_asyncio);
+
         return self;
     }
 
@@ -132,6 +138,137 @@ pub const Interpreter = struct {
             }
         }
         return last_val;
+    }
+
+    pub fn hasYield(stmts: []const Stmt) bool {
+        for (stmts) |stmt| {
+            if (stmtHasYield(stmt)) return true;
+        }
+        return false;
+    }
+
+    fn stmtHasYield(stmt: Stmt) bool {
+        switch (stmt) {
+            .expr_stmt => |e| return exprHasYield(e),
+            .assign => |a| return exprHasYield(a.value),
+            .aug_assign => |a| return exprHasYield(a.value),
+            .return_stmt => |opt_e| return if (opt_e) |e| exprHasYield(e) else false,
+            .if_stmt => |s| {
+                if (exprHasYield(s.condition)) return true;
+                if (hasYield(s.then_branch)) return true;
+                for (s.elif_branches) |el| {
+                    if (exprHasYield(el.condition) or hasYield(el.body)) return true;
+                }
+                if (s.else_branch) |eb| {
+                    if (hasYield(eb)) return true;
+                }
+                return false;
+            },
+            .while_stmt => |s| {
+                if (exprHasYield(s.condition)) return true;
+                if (hasYield(s.body)) return true;
+                if (s.else_branch) |eb| {
+                    if (hasYield(eb)) return true;
+                }
+                return false;
+            },
+            .for_stmt => |s| {
+                if (exprHasYield(s.iter)) return true;
+                if (hasYield(s.body)) return true;
+                if (s.else_branch) |eb| {
+                    if (hasYield(eb)) return true;
+                }
+                return false;
+            },
+            .with_stmt => |w| {
+                if (exprHasYield(w.context_expr)) return true;
+                if (hasYield(w.body)) return true;
+                return false;
+            },
+            .try_stmt => |t| {
+                if (hasYield(t.body)) return true;
+                for (t.handlers) |h| {
+                    if (hasYield(h.body)) return true;
+                }
+                if (t.else_branch) |eb| {
+                    if (hasYield(eb)) return true;
+                }
+                if (t.finally_branch) |fb| {
+                    if (hasYield(fb)) return true;
+                }
+                return false;
+            },
+            .assert_stmt => |a| {
+                if (exprHasYield(a.condition)) return true;
+                if (a.message) |m| return exprHasYield(m);
+                return false;
+            },
+            .def_stmt, .class_stmt, .break_stmt, .continue_stmt, .pass_stmt, .import_stmt, .import_from_stmt, .raise_stmt, .global_stmt => return false,
+        }
+    }
+
+    fn exprHasYield(expr: *Expr) bool {
+        switch (expr.*) {
+            .yield_expr => return true,
+            .await_expr => |a| return exprHasYield(a),
+            .binary => |b| return exprHasYield(b.left) or exprHasYield(b.right),
+            .unary => |u| return exprHasYield(u.expr),
+            .compare => |cmp| {
+                if (exprHasYield(cmp.left)) return true;
+                for (cmp.rights) |r| {
+                    if (exprHasYield(r)) return true;
+                }
+                return false;
+            },
+            .bool_op => |bo| {
+                for (bo.values) |v| {
+                    if (exprHasYield(v)) return true;
+                }
+                return false;
+            },
+            .call => |c| {
+                if (exprHasYield(c.callee)) return true;
+                for (c.args) |a| {
+                    if (exprHasYield(a)) return true;
+                }
+                for (c.kwargs) |kw| {
+                    if (exprHasYield(kw.value)) return true;
+                }
+                return false;
+            },
+            .attribute => |a| return exprHasYield(a.value),
+            .subscript => |s| return exprHasYield(s.value),
+            .list_expr => |items| {
+                for (items) |it| {
+                    if (exprHasYield(it)) return true;
+                }
+                return false;
+            },
+            .tuple_expr => |items| {
+                for (items) |it| {
+                    if (exprHasYield(it)) return true;
+                }
+                return false;
+            },
+            .dict_expr => |d| {
+                for (d.keys) |k| {
+                    if (exprHasYield(k)) return true;
+                }
+                for (d.values) |v| {
+                    if (exprHasYield(v)) return true;
+                }
+                return false;
+            },
+            .set_expr => |items| {
+                for (items) |it| {
+                    if (exprHasYield(it)) return true;
+                }
+                return false;
+            },
+            .ternary => |t| return exprHasYield(t.if_val) or exprHasYield(t.condition) or exprHasYield(t.else_val),
+            .list_comp => |lc| return exprHasYield(lc.elt) or exprHasYield(lc.iter),
+            .literal, .identifier, .lambda, .f_string => return false,
+        }
     }
 
     pub fn evalStmt(self: *Interpreter, stmt: Stmt, env: *Environment) anyerror!Value {
@@ -560,6 +697,56 @@ pub const Interpreter = struct {
                             }
                         }
                     },
+                    .generator => |g| {
+                        const target_ident: ?[]const u8 = if (f.target.* == .identifier) f.target.identifier.name else null;
+                        var cached_slot: ?*Value = if (target_ident) |ti| env.getSlotPtr(ti) else null;
+                        if (cached_slot == null and target_ident != null) {
+                            try env.set(target_ident.?, .none);
+                            cached_slot = env.getSlotPtr(target_ident.?);
+                        }
+                        while (g.next()) |it| {
+                            if (cached_slot) |slot| {
+                                slot.* = it;
+                            } else {
+                                try self.assignTarget(f.target, it, env);
+                            }
+                            const res = try self.evalSuite(f.body, env);
+                            switch (res) {
+                                .break_flow => {
+                                    broke = true;
+                                    break;
+                                },
+                                .continue_flow => continue,
+                                .return_flow => return res,
+                                else => {},
+                            }
+                        }
+                    },
+                    .iterator => |it| {
+                        const target_ident: ?[]const u8 = if (f.target.* == .identifier) f.target.identifier.name else null;
+                        var cached_slot: ?*Value = if (target_ident) |ti| env.getSlotPtr(ti) else null;
+                        if (cached_slot == null and target_ident != null) {
+                            try env.set(target_ident.?, .none);
+                            cached_slot = env.getSlotPtr(target_ident.?);
+                        }
+                        while (it.next(self.allocator)) |item| {
+                            if (cached_slot) |slot| {
+                                slot.* = item;
+                            } else {
+                                try self.assignTarget(f.target, item, env);
+                            }
+                            const res = try self.evalSuite(f.body, env);
+                            switch (res) {
+                                .break_flow => {
+                                    broke = true;
+                                    break;
+                                },
+                                .continue_flow => continue,
+                                .return_flow => return res,
+                                else => {},
+                            }
+                        }
+                    },
                     else => return error.TypeError,
                 }
 
@@ -585,6 +772,7 @@ pub const Interpreter = struct {
                 }
 
                 env.markEscaped();
+                const is_gen = hasYield(d.body);
                 const fn_obj = try self.allocator.create(PyFunction);
                 fn_obj.* = .{
                     .name = d.name,
@@ -596,10 +784,12 @@ pub const Interpreter = struct {
                     .body_len = d.body.len,
                     .closure_env = @ptrCast(env),
                     .chunk = null,
+                    .is_generator = is_gen,
+                    .is_async = d.is_async,
                 };
 
                 // Compile function to Bytecode Chunk for VM execution!
-                if (vararg == null and kwarg == null) {
+                if (vararg == null and kwarg == null and !is_gen and !d.is_async) {
                     const chunk_ptr = try self.allocator.create(Chunk);
                     chunk_ptr.* = Chunk.init(self.allocator);
                     var comp = Compiler.initFunction(self.allocator, chunk_ptr);
@@ -1281,6 +1471,34 @@ pub const Interpreter = struct {
                             }
                         }
                     },
+                    .generator => |g| {
+                        while (g.next()) |it| {
+                            try self.assignTarget(lc.target, it, env);
+                            var include = true;
+                            if (lc.condition) |cond| {
+                                const cv = try self.evalExpr(cond, env);
+                                include = cv.isTruthy();
+                            }
+                            if (include) {
+                                const elt_val = try self.evalExpr(lc.elt, env);
+                                try new_list.items.append(self.allocator, elt_val);
+                            }
+                        }
+                    },
+                    .iterator => |it| {
+                        while (it.next(self.allocator)) |item| {
+                            try self.assignTarget(lc.target, item, env);
+                            var include = true;
+                            if (lc.condition) |cond| {
+                                const cv = try self.evalExpr(cond, env);
+                                include = cv.isTruthy();
+                            }
+                            if (include) {
+                                const elt_val = try self.evalExpr(lc.elt, env);
+                                try new_list.items.append(self.allocator, elt_val);
+                            }
+                        }
+                    },
                     else => return error.TypeError,
                 }
                 return Value{ .list = new_list };
@@ -1295,8 +1513,18 @@ pub const Interpreter = struct {
                 return Value.makeString(self.allocator, buf.items);
             },
             .yield_expr => |ye| {
-                if (ye) |e| return self.evalExpr(e, env);
-                return .none;
+                const val = if (ye) |e| try self.evalExpr(e, env) else Value.makeNone();
+                if (self.current_yield_gen) |cg| {
+                    try cg.items.append(self.allocator, val);
+                }
+                return val;
+            },
+            .await_expr => |ae| {
+                const coro_val = try self.evalExpr(ae, env);
+                if (coro_val == .coroutine) {
+                    return coro_val.coroutine.result;
+                }
+                return coro_val;
             },
         }
     }
@@ -1812,6 +2040,70 @@ pub const Interpreter = struct {
                 }
                 return error.AttributeError;
             },
+            .generator => |g| {
+                if (std.mem.eql(u8, attr, "__iter__")) {
+                    const gen_iter = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1) return error.TypeError;
+                            return args[0];
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "__iter__", .func = gen_iter };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .generator = g }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "__next__") or std.mem.eql(u8, attr, "send")) {
+                    const gen_next = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .generator) return error.TypeError;
+                            if (args[0].generator.next()) |item| {
+                                return item;
+                            }
+                            return error.StopIteration;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = attr, .func = gen_next };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .generator = g }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
+            .iterator => |it| {
+                if (std.mem.eql(u8, attr, "__iter__")) {
+                    const it_iter = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1) return error.TypeError;
+                            return args[0];
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "__iter__", .func = it_iter };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .iterator = it }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "__next__")) {
+                    const it_next = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .iterator) return error.TypeError;
+                            if (args[0].iterator.next(allocator)) |item| {
+                                return item;
+                            }
+                            return error.StopIteration;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "__next__", .func = it_next };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .iterator = it }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
             else => return error.AttributeError,
         }
     }
@@ -2114,6 +2406,30 @@ pub const Interpreter = struct {
                 }
 
                 const body_ptr: [*]const Stmt = @ptrCast(@alignCast(f.body_opaque));
+
+                if (f.is_generator) {
+                    const gen = try PyGenerator.init(self.allocator, f.name);
+                    const prev_gen = self.current_yield_gen;
+                    self.current_yield_gen = gen;
+                    defer self.current_yield_gen = prev_gen;
+
+                    _ = self.evalSuite(body_ptr[0..f.body_len], call_env) catch |err| switch (err) {
+                        error.StopIteration => Value.makeNone(),
+                        else => return err,
+                    };
+                    return Value{ .generator = gen };
+                }
+
+                if (f.is_async) {
+                    const res = try self.evalSuite(body_ptr[0..f.body_len], call_env);
+                    const actual_res = switch (res) {
+                        .return_flow => self.return_value,
+                        else => Value.makeNone(),
+                    };
+                    const coro = try PyCoroutine.init(self.allocator, f.name, actual_res);
+                    return Value{ .coroutine = coro };
+                }
+
                 const res = try self.evalSuite(body_ptr[0..f.body_len], call_env);
                 switch (res) {
                     .return_flow => return self.return_value,

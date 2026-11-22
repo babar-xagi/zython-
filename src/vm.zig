@@ -720,6 +720,13 @@ pub const VM = struct {
                         .string => |s| {
                             iter_obj.* = .{ .kind = .{ .string = .{ .str = s.bytes, .index = 0 } } };
                         },
+                        .generator => |g| {
+                            iter_obj.* = .{ .kind = .{ .generator = g } };
+                        },
+                        .iterator => |it| {
+                            self.push(Value{ .iterator = it });
+                            continue;
+                        },
                         else => return error.TypeError,
                     }
                     self.push(Value{ .iterator = iter_obj });

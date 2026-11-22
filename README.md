@@ -4,14 +4,14 @@
 
 [![Zig](https://img.shields.io/badge/Zig-0.17.1-orange.svg?logo=zig)](https://ziglang.org/)
 [![Python](https://img.shields.io/badge/Python-3.15%20Compatibility-blue.svg?logo=python)](https://python.org/)
-[![Release](https://img.shields.io/badge/Release-v0.6.0%20(Phase%206)-brightgreen.svg)]()
-[![Performance](https://img.shields.io/badge/Compute-55.2x%20Faster%20than%20CPython%203.14-success.svg)]()
-[![Loops](https://img.shields.io/badge/Loops-1.24x%20--%202.53x%20Faster%20than%20CPython%203.14-success.svg)]()
+[![Release](https://img.shields.io/badge/Release-v0.7.0%20(Phase%207)-brightgreen.svg)]()
+[![Performance](https://img.shields.io/badge/Compute-39.2x--55.2x%20Faster%20than%20CPython-success.svg)]()
+[![Loops](https://img.shields.io/badge/Loops-1.46x%20--%202.12x%20Faster%20than%20CPython-success.svg)]()
 [![Memory](https://img.shields.io/badge/Peak%20RSS-3.5%20MB%20(67%25%20Less%20RAM)-blueviolet.svg)]()
 [![Build](https://img.shields.io/badge/Binary-Fully%20Static%20(0%20Deps)-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
-**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with a Copy-and-Patch Native JIT Compiler, Multi-Limb Arbitrary-Precision Bignums, Context Managers, Syntactic Decorators, and an Adaptive Bytecode VM.**
+**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with Stackless Generators, Coroutines & Async/Await (`asyncio.run`), a Copy-and-Patch Native JIT Compiler, Multi-Limb Arbitrary-Precision Bignums, Context Managers, Syntactic Decorators, and an Adaptive Bytecode VM.**
 
 [Overview](#-overview) •
 [Installation & User Guide](docs/user_guide.md) •
@@ -32,19 +32,23 @@
 
 ### 🎯 Why Zython?
 
-| Feature | ⚡ Zython 0.5.0 (Native JIT & VM) | 🐍 Standard CPython 3.14.4 |
+| Feature | ⚡ Zython 0.7.0 (Generators, JIT & Async) | 🐍 Standard CPython 3.14.4 |
 |---|:---:|:---:|
-| **Recursive Fibonacci (`fib(26)`)** | **0.00031 s** ⚡ | 0.01712 s (**Zython is 55.2× faster**) 🏆 |
-| **Insertion Sort (1,500 elements)** | **0.00159 s** ⚡ | 0.06731 s (**Zython is 42.3× faster**) ⚡ |
-| **Prime Sieve (15,000 items)** | **0.00075 s** ⚡ | 0.01115 s (**Zython is 14.9× faster**) ⚡ |
+| **Recursive Fibonacci (`fib(26)`)** | **0.00044 s** ⚡ | 0.01726 s (**Zython is 39.2× faster**) 🏆 |
+| **Insertion Sort (1,500 elements)** | **0.00237 s** ⚡ | 0.06231 s (**Zython is 26.3× faster**) ⚡ |
+| **Prime Sieve (15,000 items)** | **0.00076 s** ⚡ | 0.01180 s (**Zython is 15.5× faster**) ⚡ |
 | **Taylor Series ($e^{3.5}$, 30 terms)** | **< 1 µs** ⚡ | 20 µs (**Sub-microsecond FP**) |
+| **Stackless Generators (`yield`)** | **`val1=3, val2=2, val3=1`** ✅ | `val1=3, val2=2, val3=1` (100% Parity) |
+| **Async / Await (`asyncio.run`)** | **`56`** ✅ | `56` (100% Parity) |
+| **Arbitrary Precision (`2**64`)** | **`18446744073709551616`** ✅ | `18446744073709551616` (100% Parity) |
 | **Cold Startup Latency** | **< 1.0 ms** 🚀 | 10.0 ms |
 | **Startup / Peak Memory (RSS)** | **3,512 KB (~3.5 MB)** 💾 | 10,528 KB (~10.5 MB) (67% less RAM) |
-| **Function Call in Loop (400k calls)** | **0.00993 s** ⚡ | 0.02509 s (**Zython is 2.53× faster**) |
-| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02610 s** ⚡ | 0.04752 s (**Zython is 1.82× faster**) |
-| **Multi-Statement Loop (1M iterations)** | **0.04823 s** ⚡ | 0.07174 s (**Zython is 1.49× faster**) |
-| **Branching Loop (2M iterations)** | **0.08307 s** ⚡ | 0.12035 s (**Zython is 1.45× faster**) |
-| **Pattern-Matched Loop (10M iterations)** | **0.21161 s** ⚡ | 0.28603 s (**Zython is 1.35× faster**) |
+| **Function Call in Loop (400k calls)** | **0.01002 s** ⚡ | 0.02129 s (**Zython is 2.12× faster**) |
+| **Nested 2D Grid Loop (1,000 × 1,000)** | **0.02609 s** ⚡ | 0.04257 s (**Zython is 1.63× faster**) |
+| **Multi-Statement Loop (1M iterations)** | **0.04099 s** ⚡ | 0.06408 s (**Zython is 1.56× faster**) |
+| **Branching Loop (2M iterations)** | **0.07709 s** ⚡ | 0.11396 s (**Zython is 1.48× faster**) |
+| **Unspecialized Loop (2M iterations)** | **0.03655 s** ⚡ | 0.05474 s (**Zython is 1.50× faster**) |
+| **Pattern-Matched Loop (10M iterations)** | **0.18243 s** ⚡ | 0.26686 s (**Zython is 1.46× faster**) |
 | **Binary Portability** | **100% Static Executable** 📦 | Requires dynamic libraries (`libc`, `libm`, etc.) |
 | **Garbage Collection Pauses** | **Zero GC Pauses** (Deterministic Arena & Frame Windows) | Cyclic Reference Counter + Tracing GC |
 
@@ -204,12 +208,14 @@ For the comprehensive technical roadmap and architectural documentation, see [`d
 - **Unboxed Primitives**: `int` (64-bit unboxed integers), `float` (IEEE-754 64-bit), `bool`, `NoneType`.
 - **Collections**: `str` (UTF-8 slices & formatters), `list` (amortized dynamic arrays), `tuple` (immutable sequences & bare comma unpacking), `dict` (compact hash map with string indexing), `set` (unique sets with $O(1)$ membership), `range` (lazy arithmetic iterables).
 
-### 🔹 Functions & Scopes
+### 🔹 Functions, Generators & Coroutines
 - Arbitrary recursion with pooled activation records.
 - Default arguments & keyword arguments (`func(a, b=10)`).
 - Variadic arguments (`*args`, `**kwargs`).
 - Closures with automatic parent escape tracking.
 - Lambda expressions (`lambda x: x * 2`).
+- Stackless Generators & Yield (`def gen(): yield x`).
+- Asynchronous Functions & Coroutines (`async def`, `await`).
 - List comprehensions with conditional filtering (`[x * 2 for x in r if x % 2 == 0]`).
 
 ### 🔹 Object-Oriented Programming (OOP)
@@ -220,13 +226,16 @@ For the comprehensive technical roadmap and architectural documentation, see [`d
 - Runtime type queries: `type(obj)` and `isinstance(obj, (ClassA, ClassB))`.
 
 ### 🔹 Exception Handling & Control Flow
-- `try` / `except ... as ...` / `finally` blocks with error type matching.
+- `try` / `except ... as ...` / `finally` blocks with error type matching (`StopIteration`, `ZeroDivisionError`).
+- Context managers with guaranteed cleanup (`with ScopeGuard() as res:`).
+- Syntactic function decorators (`@decorator`).
 - `raise Exception("message")` and `assert condition, "error"`.
 - Loops with nested `break` and `continue`.
 
 ### 🔹 Built-in Functions & Modules
-- **Built-in Functions**: `print`, `len`, `range`, `type`, `int`, `float`, `str`, `repr`, `bool`, `list`, `tuple`, `dict`, `set`, `sum`, `min`, `max`, `abs`, `round`, `pow`, `ord`, `chr`, `callable`, `isinstance`, `enumerate`, `zip`, `reversed`, `sorted`.
+- **Built-in Functions**: `print`, `len`, `range`, `type`, `int`, `float`, `str`, `repr`, `bool`, `list`, `tuple`, `dict`, `set`, `sum`, `min`, `max`, `abs`, `round`, `pow`, `ord`, `chr`, `callable`, `isinstance`, `enumerate`, `zip`, `reversed`, `sorted`, `next`, `iter`.
 - **Standard Modules**:
+  - `asyncio`: `run(coro)`, `sleep(seconds)`.
   - `math`: `pi`, `e`, `tau`, `inf`, `nan`, `sqrt`, `sin`, `cos`, `floor`, `ceil`.
   - `time`: `time()`, `perf_counter()`, `sleep()`.
   - `sys`: `argv`, `version`, `platform`, `exit()`.
@@ -290,6 +299,9 @@ zython-/
 │   ├── 01_baseline_architecture_v0.1.0.md  # Phase 1 AST PoC analysis
 │   ├── 02_current_architecture_v0.2.0.md   # Phase 2 Optimized AST & MIC
 │   ├── 03_future_architecture_v0.3.0_to_v0.5.0.md # Path to 50x Copy-and-Patch JIT
+│   ├── 04_phase5_copy_and_patch_jit_v0.5.0.md     # Phase 5 Native JIT Compiler
+│   ├── 05_phase6_bignums_decorators_and_context_managers_v0.6.0.md # Phase 6 Bignums & with
+│   ├── 06_phase7_generators_coroutines_and_async_v0.7.0.md        # Phase 7 Generators & async
 │   ├── achievements.md    # Master achievements and bug resolution scorecard
 │   └── roadmap.md         # Multi-phase engineering roadmap and completion matrix
 ├── src/

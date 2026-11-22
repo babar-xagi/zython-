@@ -191,6 +191,47 @@ pub const PyFunction = struct {
     jit_entry: ?*const anyopaque = null,
     jit_kind: u8 = 0,
     call_count: u32 = 0,
+    is_generator: bool = false,
+    is_async: bool = false,
+};
+
+pub const PyGenerator = struct {
+    name: []const u8,
+    items: std.ArrayList(Value),
+    index: usize = 0,
+
+    pub fn init(allocator: Allocator, name: []const u8) !*PyGenerator {
+        const self = try allocator.create(PyGenerator);
+        self.* = .{
+            .name = name,
+            .items = .empty,
+            .index = 0,
+        };
+        return self;
+    }
+
+    pub fn next(self: *PyGenerator) ?Value {
+        if (self.index < self.items.items.len) {
+            const val = self.items.items[self.index];
+            self.index += 1;
+            return val;
+        }
+        return null;
+    }
+};
+
+pub const PyCoroutine = struct {
+    name: []const u8,
+    result: Value,
+
+    pub fn init(allocator: Allocator, name: []const u8, result: Value) !*PyCoroutine {
+        const self = try allocator.create(PyCoroutine);
+        self.* = .{
+            .name = name,
+            .result = result,
+        };
+        return self;
+    }
 };
 
 pub const PyIterator = struct {
@@ -200,10 +241,12 @@ pub const PyIterator = struct {
         tuple: struct { items: []Value, index: usize },
         set: struct { items: []Value, index: usize },
         string: struct { str: []const u8, index: usize },
+        generator: *PyGenerator,
     },
 
     pub fn next(self: *PyIterator, allocator: Allocator) ?Value {
         switch (self.kind) {
+            .generator => |g| return g.next(),
             .range => |*r| {
                 if (r.step > 0) {
                     if (r.current < r.stop) {
@@ -403,6 +446,8 @@ pub const Value = union(enum) {
     bound_method: *PyBoundMethod,
     module: *PyModule,
     iterator: *PyIterator,
+    generator: *PyGenerator,
+    coroutine: *PyCoroutine,
     return_flow,
     break_flow,
     continue_flow,
@@ -442,7 +487,7 @@ pub const Value = union(enum) {
             .dict => |d| d.entries.items.len > 0,
             .set => |s| s.items.items.len > 0,
             .range => |r| r.length() > 0,
-            .function, .builtin, .class, .instance, .bound_method, .module, .iterator => true,
+            .function, .builtin, .class, .instance, .bound_method, .module, .iterator, .generator, .coroutine => true,
             .return_flow, .break_flow, .continue_flow => false,
         };
     }
@@ -466,6 +511,8 @@ pub const Value = union(enum) {
             .bound_method => "method",
             .module => "module",
             .iterator => "iterator",
+            .generator => "generator",
+            .coroutine => "coroutine",
             .return_flow => "return",
             .break_flow => "break",
             .continue_flow => "continue",
@@ -558,6 +605,14 @@ pub const Value = union(enum) {
                 if (other != .iterator) return false;
                 return it == other.iterator;
             },
+            .generator => |g| {
+                if (other != .generator) return false;
+                return g == other.generator;
+            },
+            .coroutine => |co| {
+                if (other != .coroutine) return false;
+                return co == other.coroutine;
+            },
             else => return false,
         }
     }
@@ -638,6 +693,8 @@ pub const Value = union(enum) {
             .bound_method => return "<bound method>",
             .module => |m| return std.fmt.allocPrint(allocator, "<module '{s}'>", .{m.name}),
             .iterator => return "<iterator object>",
+            .generator => |g| return std.fmt.allocPrint(allocator, "<generator object {s}>", .{g.name}),
+            .coroutine => |co| return std.fmt.allocPrint(allocator, "<coroutine object {s}>", .{co.name}),
             .return_flow => return "return",
             .break_flow => return "break",
             .continue_flow => return "continue",

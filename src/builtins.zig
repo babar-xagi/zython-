@@ -167,6 +167,16 @@ pub fn builtinList(allocator: Allocator, _: ?*anyopaque, args: []const Value, _:
                 }
             }
         },
+        .generator => |g| {
+            while (g.next()) |it| {
+                try list.items.append(allocator, it);
+            }
+        },
+        .iterator => |it| {
+            while (it.next(allocator)) |item| {
+                try list.items.append(allocator, item);
+            }
+        },
         else => return error.TypeError,
     }
     return Value{ .list = list };
@@ -205,6 +215,12 @@ pub fn builtinSet(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: 
         },
         .set => |orig| {
             for (orig.items.items) |it| try s.add(allocator, it);
+        },
+        .generator => |g| {
+            while (g.next()) |it| try s.add(allocator, it);
+        },
+        .iterator => |it| {
+            while (it.next(allocator)) |item| try s.add(allocator, item);
         },
         else => return error.TypeError,
     }
@@ -494,6 +510,65 @@ pub fn builtinSorted(allocator: Allocator, _: ?*anyopaque, args: []const Value, 
     return l;
 }
 
+pub fn builtinNext(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+    if (args.len < 1 or args.len > 2) return error.TypeError;
+    const target = args[0];
+    const default_val = if (args.len == 2) args[1] else null;
+
+    switch (target) {
+        .iterator => |it| {
+            if (it.next(allocator)) |v| return v;
+            if (default_val) |d| return d;
+            return error.StopIteration;
+        },
+        .generator => |g| {
+            if (g.next()) |v| return v;
+            if (default_val) |d| return d;
+            return error.StopIteration;
+        },
+        else => return error.TypeError,
+    }
+}
+
+pub fn builtinIter(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+    if (args.len != 1) return error.TypeError;
+    const v = args[0];
+    switch (v) {
+        .iterator => return v,
+        .generator => |g| {
+            const it = try allocator.create(value_mod.PyIterator);
+            it.* = .{ .kind = .{ .generator = g } };
+            return Value{ .iterator = it };
+        },
+        .range => |r| {
+            const it = try allocator.create(value_mod.PyIterator);
+            it.* = .{ .kind = .{ .range = .{ .current = r.start, .stop = r.stop, .step = r.step } } };
+            return Value{ .iterator = it };
+        },
+        .list => |l| {
+            const it = try allocator.create(value_mod.PyIterator);
+            it.* = .{ .kind = .{ .list = .{ .list = l, .index = 0 } } };
+            return Value{ .iterator = it };
+        },
+        .tuple => |t| {
+            const it = try allocator.create(value_mod.PyIterator);
+            it.* = .{ .kind = .{ .tuple = .{ .items = t.items, .index = 0 } } };
+            return Value{ .iterator = it };
+        },
+        .set => |s| {
+            const it = try allocator.create(value_mod.PyIterator);
+            it.* = .{ .kind = .{ .set = .{ .items = s.items.items, .index = 0 } } };
+            return Value{ .iterator = it };
+        },
+        .string => |s| {
+            const it = try allocator.create(value_mod.PyIterator);
+            it.* = .{ .kind = .{ .string = .{ .str = s.bytes, .index = 0 } } };
+            return Value{ .iterator = it };
+        },
+        else => return error.TypeError,
+    }
+}
+
 // Module: math
 pub fn makeMathModule(allocator: Allocator) !Value {
     const mod = try PyModule.init(allocator, "math");
@@ -636,6 +711,44 @@ pub fn makeSysModule(allocator: Allocator, args: []const [:0]const u8) !Value {
     return Value{ .module = mod };
 }
 
+// Module: asyncio
+pub fn makeAsyncioModule(allocator: Allocator) !Value {
+    const mod = try PyModule.init(allocator, "asyncio");
+
+    const asyncio_run = struct {
+        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+            if (args.len != 1) return error.TypeError;
+            if (args[0] == .coroutine) {
+                return args[0].coroutine.result;
+            }
+            return args[0];
+        }
+    }.call;
+    const b_run = try allocator.create(PyBuiltin);
+    b_run.* = .{ .name = "run", .func = asyncio_run };
+    try mod.attributes.put("run", Value{ .builtin = b_run });
+
+    const asyncio_sleep = struct {
+        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+            if (args.len != 1) return error.TypeError;
+            const secs = if (args[0] == .float) args[0].float else @as(f64, @floatFromInt(args[0].int));
+            const total_ns: u64 = @intFromFloat(secs * 1e9);
+            var req = std.posix.system.timespec{
+                .sec = @intCast(total_ns / 1_000_000_000),
+                .nsec = @intCast(total_ns % 1_000_000_000),
+            };
+            var rem: std.posix.system.timespec = undefined;
+            _ = std.posix.system.nanosleep(&req, &rem);
+            return .none;
+        }
+    }.call;
+    const b_sleep = try allocator.create(PyBuiltin);
+    b_sleep.* = .{ .name = "sleep", .func = asyncio_sleep };
+    try mod.attributes.put("sleep", Value{ .builtin = b_sleep });
+
+    return Value{ .module = mod };
+}
+
 pub fn populateBuiltins(allocator: Allocator, env: *Environment) !void {
     const defs = [_]struct { name: []const u8, func: value_mod.BuiltinFn }{
         .{ .name = "print", .func = builtinPrint },
@@ -665,6 +778,8 @@ pub fn populateBuiltins(allocator: Allocator, env: *Environment) !void {
         .{ .name = "zip", .func = builtinZip },
         .{ .name = "reversed", .func = builtinReversed },
         .{ .name = "sorted", .func = builtinSorted },
+        .{ .name = "next", .func = builtinNext },
+        .{ .name = "iter", .func = builtinIter },
     };
 
     for (defs) |d| {

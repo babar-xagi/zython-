@@ -110,6 +110,12 @@ pub const Parser = struct {
         if (try self.match(.kw_assert)) return self.parseAssert();
         if (try self.match(.kw_with)) return self.parseWith();
         if (try self.match(.at)) return self.parseDecorated();
+        if (try self.match(.kw_async)) {
+            _ = try self.consume(.kw_def, "Expected 'def' after 'async'");
+            var def_s = try self.parseDef();
+            def_s.def_stmt.is_async = true;
+            return def_s;
+        }
 
         return self.parseSimpleStmt();
     }
@@ -142,7 +148,13 @@ pub const Parser = struct {
             try self.skipNewlines();
         }
 
-        if (try self.match(.kw_def)) {
+        if (try self.match(.kw_async)) {
+            _ = try self.consume(.kw_def, "Expected 'def' after 'async'");
+            var def_s = try self.parseDef();
+            def_s.def_stmt.decorators = decs.items;
+            def_s.def_stmt.is_async = true;
+            return def_s;
+        } else if (try self.match(.kw_def)) {
             var def_s = try self.parseDef();
             def_s.def_stmt.decorators = decs.items;
             return def_s;
@@ -792,6 +804,12 @@ pub const Parser = struct {
     }
 
     fn parseUnary(self: *Parser) anyerror!*Expr {
+        if (try self.match(.kw_await)) {
+            const expr = try self.parseUnary();
+            const node = try self.allocator.create(Expr);
+            node.* = .{ .await_expr = expr };
+            return node;
+        }
         if (try self.match(.plus)) {
             const expr = try self.parseUnary();
             const node = try self.allocator.create(Expr);

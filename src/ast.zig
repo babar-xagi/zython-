@@ -96,6 +96,7 @@ pub const Expr = union(enum) {
     list_comp: ListComp,
     f_string: FString,
     yield_expr: ?*Expr,
+    await_expr: *Expr,
 };
 
 pub const Param = struct {
@@ -142,6 +143,7 @@ pub const Stmt = union(enum) {
         params: []Param,
         body: []Stmt,
         decorators: []*Expr = &.{},
+        is_async: bool = false,
     },
     with_stmt: struct {
         context_expr: *Expr,

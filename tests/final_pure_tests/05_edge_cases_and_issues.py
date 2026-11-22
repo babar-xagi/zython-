@@ -110,8 +110,35 @@ class ScopeGuard:
 with ScopeGuard() as guard_val:
     print("11. Context Manager with 'with': Resource =", guard_val)
 
-# 12. Remaining Roadmap Scope (Future Releases)
-print("12. Future Scope Roadmap:")
-print("   - Generators / yield frame suspension")
-print("   - Async/await coroutine scheduler")
+# 12. Generators and Yield Iteration Protocol
+def countdown(n):
+    while n > 0:
+        yield n
+        n -= 1
+
+gen = countdown(3)
+val1 = next(gen)
+val2 = next(gen)
+val3 = next(gen)
+gen_list = [x * 10 for x in countdown(4)]
+print("12. Generators & Yield: val1 =", val1, "val2 =", val2, "val3 =", val3, "gen_list =", gen_list)
+
+# 13. Async / Await Coroutines and asyncio.run
+import asyncio
+
+async def compute_val(a, b):
+    return a * b + 2
+
+async def async_main():
+    part1 = await compute_val(6, 7)
+    part2 = await compute_val(2, 5)
+    return part1 + part2
+
+res_async = asyncio.run(async_main())
+print("13. Async / Await Coroutines: asyncio.run(async_main()) =", res_async)
+
+# 14. Remaining Roadmap Scope (Future Releases)
+print("14. Future Scope Roadmap:")
+print("   - Native Multi-Threading & ThreadPoolExecutor")
+print("   - C Extension & PyO3 Compatibility ABI")
 print("Ground reality edge-cases evaluation complete.")
