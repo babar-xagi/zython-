@@ -302,6 +302,7 @@ pub const Lexer = struct {
                 return Token{ .tag = .dot, .lexeme = ".", .line = start_line, .column = start_col };
             },
             ';' => return Token{ .tag = .semicolon, .lexeme = ";", .line = start_line, .column = start_col },
+            '@' => return Token{ .tag = .at, .lexeme = "@", .line = start_line, .column = start_col },
             '~' => return Token{ .tag = .tilde, .lexeme = "~", .line = start_line, .column = start_col },
             '+' => {
                 if (self.match('=')) return Token{ .tag = .plus_equal, .lexeme = "+=", .line = start_line, .column = start_col };

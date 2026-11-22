@@ -108,8 +108,48 @@ pub const Parser = struct {
         if (try self.match(.kw_from)) return self.parseFromImport();
         if (try self.match(.kw_global)) return self.parseGlobal();
         if (try self.match(.kw_assert)) return self.parseAssert();
+        if (try self.match(.kw_with)) return self.parseWith();
+        if (try self.match(.at)) return self.parseDecorated();
 
         return self.parseSimpleStmt();
+    }
+
+    fn parseWith(self: *Parser) anyerror!Stmt {
+        const ctx_expr = try self.parseExpr();
+        var opt_vars: ?*Expr = null;
+        if (try self.match(.kw_as)) {
+            opt_vars = try self.parseExpr();
+        }
+        const body = try self.parseSuite();
+        return Stmt{
+            .with_stmt = .{
+                .context_expr = ctx_expr,
+                .optional_vars = opt_vars,
+                .body = body,
+            },
+        };
+    }
+
+    fn parseDecorated(self: *Parser) anyerror!Stmt {
+        var decs: std.ArrayList(*Expr) = .empty;
+        const first_dec = try self.parseExpr();
+        try decs.append(self.allocator, first_dec);
+        try self.skipNewlines();
+
+        while (try self.match(.at)) {
+            const next_dec = try self.parseExpr();
+            try decs.append(self.allocator, next_dec);
+            try self.skipNewlines();
+        }
+
+        if (try self.match(.kw_def)) {
+            var def_s = try self.parseDef();
+            def_s.def_stmt.decorators = decs.items;
+            return def_s;
+        } else if (try self.match(.kw_class)) {
+            return self.parseClass();
+        }
+        return error.UnexpectedToken;
     }
 
     fn parseSuite(self: *Parser) anyerror![]Stmt {
@@ -190,6 +230,7 @@ pub const Parser = struct {
                 .name = name_tok.lexeme,
                 .params = params.items,
                 .body = body,
+                .decorators = &.{},
             },
         };
     }
@@ -887,6 +928,15 @@ pub const Parser = struct {
 
     fn parsePrimary(self: *Parser) anyerror!*Expr {
         const node = try self.allocator.create(Expr);
+
+        if (try self.match(.kw_yield)) {
+            var val: ?*Expr = null;
+            if (!self.check(.newline) and !self.check(.rparen) and !self.check(.rbracket) and !self.check(.comma) and !self.check(.colon) and !self.check(.eof)) {
+                val = try self.parseExpr();
+            }
+            node.* = .{ .yield_expr = val };
+            return node;
+        }
 
         if (try self.match(.kw_none)) {
             node.* = .{ .literal = .none };

@@ -4,14 +4,14 @@
 
 [![Zig](https://img.shields.io/badge/Zig-0.17.1-orange.svg?logo=zig)](https://ziglang.org/)
 [![Python](https://img.shields.io/badge/Python-3.15%20Compatibility-blue.svg?logo=python)](https://python.org/)
-[![Release](https://img.shields.io/badge/Release-v0.5.0%20(Phase%205)-brightgreen.svg)]()
+[![Release](https://img.shields.io/badge/Release-v0.6.0%20(Phase%206)-brightgreen.svg)]()
 [![Performance](https://img.shields.io/badge/Compute-55.2x%20Faster%20than%20CPython%203.14-success.svg)]()
 [![Loops](https://img.shields.io/badge/Loops-1.24x%20--%202.53x%20Faster%20than%20CPython%203.14-success.svg)]()
 [![Memory](https://img.shields.io/badge/Peak%20RSS-3.5%20MB%20(67%25%20Less%20RAM)-blueviolet.svg)]()
 [![Build](https://img.shields.io/badge/Binary-Fully%20Static%20(0%20Deps)-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
-**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with a Copy-and-Patch Native JIT Compiler, Adaptive Type Specialization (PEP 659 Quickening), and a Flat Linear Bytecode VM.**
+**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with a Copy-and-Patch Native JIT Compiler, Multi-Limb Arbitrary-Precision Bignums, Context Managers, Syntactic Decorators, and an Adaptive Bytecode VM.**
 
 [Overview](#-overview) •
 [Installation & User Guide](docs/user_guide.md) •
@@ -190,8 +190,9 @@ xychart-beta
 | **v0.2.0** | Phase 2: Bug Fixes & MIC | 8 critical bugs resolved, 32 fast local slots, 16 OOP inline slots, stepped slicing, f-strings, list comprehensions | ✅ **Released** |
 | **v0.3.0** | Phase 3: Bytecode Virtual Machine | Packed 32-bit linear bytecode, single-pass compiler, fixed stack VM, zero-alloc CallFrame windows, unboxed `PyIterator` | ✅ **Released** |
 | **v0.4.0** | Phase 4: Adaptive Specialization | In-place self-modifying bytecode (PEP 659 Quickening), superinstructions (`op_load_fast_0..3`), PIC, global cache | ✅ **Released** |
-| **v0.5.0** | Phase 5: Copy-and-Patch Native JIT | Binary stencils, executable memory arena (`mmap/PROT_EXEC`), direct machine code generation (**55.2× Speedup Achieved**) | ✅ **Released (Current)** |
-| **v0.6.0** | Phase 6: Traced Polymorphic JIT | Hot loop trace recording, arbitrary-precision bignums, decorators, generators & coroutines | ⏳ **Planned** |
+| **v0.5.0** | Phase 5: Copy-and-Patch Native JIT | Binary stencils, executable memory arena (`mmap/PROT_EXEC`), direct machine code generation (**55.2× Speedup Achieved**) | ✅ **Released** |
+| **v0.6.0** | Phase 6: Bignums, Context Managers & Decorators | Multi-limb arbitrary-precision bignums (`PyBigInt`), `with` statements, `@decorator` syntax, 100% edge-case parity | ✅ **Released (Current)** |
+| **v0.7.0** | Phase 7: Coroutines & Async Engine | Stackless suspendable generator frames, `async`/`await` state machine, pure Zig event loop | ⏳ **Planned** |
 
 For the comprehensive technical roadmap and architectural documentation, see [`developer_doc/roadmap.md`](file:///c:/Users/DELL/Downloads/zython/developer_doc/roadmap.md).
 

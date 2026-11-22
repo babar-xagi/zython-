@@ -14,6 +14,7 @@ const PyClass = value_mod.PyClass;
 const PyInstance = value_mod.PyInstance;
 const PyBoundMethod = value_mod.PyBoundMethod;
 const PyModule = value_mod.PyModule;
+const PyBigInt = value_mod.PyBigInt;
 const DictEntry = value_mod.DictEntry;
 const ast_mod = @import("ast.zig");
 const Expr = ast_mod.Expr;
@@ -629,7 +630,16 @@ pub const Interpreter = struct {
                     }
                 }
 
-                const fn_val = Value{ .function = fn_obj };
+                var fn_val = Value{ .function = fn_obj };
+                if (d.decorators.len > 0) {
+                    var i: usize = d.decorators.len;
+                    while (i > 0) {
+                        i -= 1;
+                        const dec_fn = try self.evalExpr(d.decorators[i], env);
+                        const wrap_args = [_]Value{fn_val};
+                        fn_val = try self.callValue(dec_fn, &wrap_args, &.{});
+                    }
+                }
                 try env.set(d.name, fn_val);
                 return .none;
             },
@@ -773,6 +783,32 @@ pub const Interpreter = struct {
                 }
                 return .none;
             },
+            .with_stmt => |w| {
+                const ctx_val = try self.evalExpr(w.context_expr, env);
+                var enter_res: Value = ctx_val;
+                if (self.evalAttribute(ctx_val, "__enter__")) |enter_fn| {
+                    enter_res = try self.callValue(enter_fn, &.{}, &.{});
+                } else |_| {}
+
+                if (w.optional_vars) |target| {
+                    try self.assignTarget(target, enter_res, env);
+                }
+
+                var exc_caught: ?anyerror = null;
+                const body_res = self.evalSuite(w.body, env) catch |err| blk: {
+                    exc_caught = err;
+                    break :blk Value.none;
+                };
+
+                if (self.evalAttribute(ctx_val, "__exit__")) |exit_fn| {
+                    const none_val = Value.makeNone();
+                    const exit_args = [_]Value{ none_val, none_val, none_val };
+                    _ = self.callValue(exit_fn, &exit_args, &.{}) catch {};
+                } else |_| {}
+
+                if (exc_caught) |err| return err;
+                return body_res;
+            },
         }
     }
 
@@ -906,6 +942,24 @@ pub const Interpreter = struct {
                         .bit_xor => return Value.makeInt(left.int ^ right.int),
                         .pow => {
                             if (right.int >= 0) {
+                                if (left.int == 2 and right.int >= 63) {
+                                    var big_managed = try std.math.big.int.Managed.init(self.allocator);
+                                    try big_managed.set(2);
+                                    var res = try std.math.big.int.Managed.init(self.allocator);
+                                    try res.pow(&big_managed, @intCast(right.int));
+                                    big_managed.deinit();
+                                    const big_obj = try PyBigInt.initFromManaged(self.allocator, res);
+                                    return Value{ .bignum = big_obj };
+                                }
+                                if (right.int > 60 and (left.int > 1 or left.int < -1)) {
+                                    var big_managed = try std.math.big.int.Managed.init(self.allocator);
+                                    try big_managed.set(left.int);
+                                    var res = try std.math.big.int.Managed.init(self.allocator);
+                                    try res.pow(&big_managed, @intCast(right.int));
+                                    big_managed.deinit();
+                                    const big_obj = try PyBigInt.initFromManaged(self.allocator, res);
+                                    return Value{ .bignum = big_obj };
+                                }
                                 return Value.makeInt(std.math.pow(i64, left.int, right.int));
                             }
                         },
@@ -1240,6 +1294,10 @@ pub const Interpreter = struct {
                 }
                 return Value.makeString(self.allocator, buf.items);
             },
+            .yield_expr => |ye| {
+                if (ye) |e| return self.evalExpr(e, env);
+                return .none;
+            },
         }
     }
 
@@ -1276,6 +1334,24 @@ pub const Interpreter = struct {
                 },
                 .pow => {
                     if (right.int >= 0) {
+                        if (left.int == 2 and right.int >= 63) {
+                            var b = try std.math.big.int.Managed.init(self.allocator);
+                            try b.set(2);
+                            var res = try std.math.big.int.Managed.init(self.allocator);
+                            try res.pow(&b, @intCast(right.int));
+                            b.deinit();
+                            const big_obj = try PyBigInt.initFromManaged(self.allocator, res);
+                            return Value{ .bignum = big_obj };
+                        }
+                        if (right.int > 60 and (left.int > 1 or left.int < -1)) {
+                            var b = try std.math.big.int.Managed.init(self.allocator);
+                            try b.set(left.int);
+                            var res = try std.math.big.int.Managed.init(self.allocator);
+                            try res.pow(&b, @intCast(right.int));
+                            b.deinit();
+                            const big_obj = try PyBigInt.initFromManaged(self.allocator, res);
+                            return Value{ .bignum = big_obj };
+                        }
                         return Value.makeInt(std.math.pow(i64, left.int, right.int));
                     } else {
                         return Value.makeFloat(std.math.pow(f64, @as(f64, @floatFromInt(left.int)), @as(f64, @floatFromInt(right.int))));
@@ -1286,6 +1362,40 @@ pub const Interpreter = struct {
                     return Value.makeFloat(@as(f64, @floatFromInt(left.int)) / @as(f64, @floatFromInt(right.int)));
                 },
             }
+        }
+
+        if (left == .bignum or right == .bignum) {
+            var a_managed: std.math.big.int.Managed = undefined;
+            var a_needs_deinit = false;
+            if (left == .bignum) {
+                a_managed = left.bignum.managed;
+            } else if (left == .int) {
+                a_managed = try std.math.big.int.Managed.init(self.allocator);
+                try a_managed.set(left.int);
+                a_needs_deinit = true;
+            } else return error.TypeError;
+            defer if (a_needs_deinit) a_managed.deinit();
+
+            var b_managed: std.math.big.int.Managed = undefined;
+            var b_needs_deinit = false;
+            if (right == .bignum) {
+                b_managed = right.bignum.managed;
+            } else if (right == .int) {
+                b_managed = try std.math.big.int.Managed.init(self.allocator);
+                try b_managed.set(right.int);
+                b_needs_deinit = true;
+            } else return error.TypeError;
+            defer if (b_needs_deinit) b_managed.deinit();
+
+            var res = try std.math.big.int.Managed.init(self.allocator);
+            switch (op) {
+                .add => try res.add(&a_managed, &b_managed),
+                .sub => try res.sub(&a_managed, &b_managed),
+                .mul => try res.mul(&a_managed, &b_managed),
+                else => return error.TypeError,
+            }
+            const big_obj = try PyBigInt.initFromManaged(self.allocator, res);
+            return Value{ .bignum = big_obj };
         }
 
         switch (op) {

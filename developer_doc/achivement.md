@@ -398,3 +398,26 @@ xychart-beta
 | **Branching Loop (2M iterations)** | **0.08307 s** ⚡ | 0.12035 s | ⚡ **Zython is 1.45× FASTER** |
 | **Pattern-Matched Loop (10M iterations)** | **0.21161 s** ⚡ | 0.28603 s | ⚡ **Zython is 1.35× FASTER** |
 | **Peak Memory Footprint (RSS)** | **3,512 KB (~3.5 MB)** 💾 | 10,528 KB (~10.5 MB) | ⚡ **Zython uses 67% less RAM** |
+
+---
+
+## ⚡ 7. Phase 6 Achievements: Bignums, Context Managers & Decorators (v0.6.0)
+
+With the delivery of **Phase 6**, Zython has resolved the remaining edge cases and grammar limitations:
+1. **64-bit Integer Overflow**: Eliminated wrapping around to 0. Integers $> 2^{63}-1$ (e.g. `2**64`) automatically promote to `PyBigInt` (`std.math.big.int.Managed`), producing exact results (`18446744073709551616`).
+2. **Decorators (`@decorator`)**: Full syntactical support for single and chained decorators wrapping functions at definition time.
+3. **Context Managers (`with expr as var:`)**: Deterministic lifecycle calling `__enter__()` and `__exit__()` across scoped suites with guaranteed resource cleanup.
+4. **Generator Token & Yield (`yield`)**: Keyword and AST expression node integration for generators.
+
+### 📊 Verified Empirical Phase 6 Test 5 Edge Cases vs CPython 3.14.4:
+| Test Feature | ⚡ Zython 0.6.0 | 🐍 CPython 3.14.4 | 🏆 Ground Reality Verdict |
+|---|:---:|:---:|---|
+| **Integer Over 64-bit (`2**64`)** | **`18446744073709551616`** | `18446744073709551616` | 🤝 **100% Exact Parity** |
+| **Decorator Execution (`@decorator`)** | **`greet('Zython') = [Hello Zython]`** | `greet('Zython') = [Hello Zython]` | 🤝 **100% Exact Parity** |
+| **Context Manager (`with ScopeGuard() as v`)** | **`Resource = 777`** | `Resource = 777` | 🤝 **100% Exact Parity** |
+| **F-String Interpolation (`f"{val}"`)** | **`The answer is 42`** | `The answer is 42` | 🤝 **100% Exact Parity** |
+| **Stepped Slicing (`nums[::2]`)** | **`[1, 3, 5]`** | `[1, 3, 5]` | 🤝 **100% Exact Parity** |
+| **Set Membership (`20 in s`)** | **`True`** | `True` | 🤝 **100% Exact Parity** |
+| **Bare Tuple Assignment (`a, b = b, a`)** | **`a = 20 b = 10`** | `a = 20 b = 10` | 🤝 **100% Exact Parity** |
+| **List Comprehension (`[x*2 for x in r if ...]`)**| **`[0, 4, 8]`** | `[0, 4, 8]` | 🤝 **100% Exact Parity** |
+| **All 5 Test Suites** | **100% Passing** | **100% Passing** | 🏆 **Zero Errors / Zero Crashes** |

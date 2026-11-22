@@ -30,6 +30,8 @@ pub const TokenType = enum {
     kw_nonlocal,
     kw_assert,
     kw_del,
+    kw_with,
+    kw_yield,
     kw_true,
     kw_false,
     kw_none,
@@ -91,6 +93,7 @@ pub const TokenType = enum {
     dot,
     semicolon,
     arrow,
+    at,
 
     // Layout
     newline,
@@ -151,6 +154,8 @@ pub const keywords = std.StaticStringMap(TokenType).initComptime(.{
     .{ "nonlocal", .kw_nonlocal },
     .{ "assert", .kw_assert },
     .{ "del", .kw_del },
+    .{ "with", .kw_with },
+    .{ "yield", .kw_yield },
     .{ "True", .kw_true },
     .{ "False", .kw_false },
     .{ "None", .kw_none },

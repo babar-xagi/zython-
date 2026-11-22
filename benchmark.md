@@ -21,12 +21,15 @@
 
 ## 📊 Summary Performance Scorecard
 
-| Category / Benchmark | ⚡ Zython 0.5.0 (Native JIT) | 🐍 CPython 3.14.4 | 🏆 Winner | Speedup Factor / Verdict |
+| Category / Benchmark | ⚡ Zython 0.6.0 (Native JIT & Grammar) | 🐍 CPython 3.14.4 | 🏆 Winner | Speedup Factor / Verdict |
 |---|:---:|:---:|:---:|:---:|
 | **Recursive Fibonacci (`fib(26)`)** | **0.00031 s** | 0.01712 s | 🏆 **Zython** | **55.2x Faster** (50x Goal Achieved!) 🚀 |
 | **Insertion Sort (1,500 elements)** | **0.00159 s** | 0.06731 s | ⚡ **Zython** | **42.3x Faster** ⚡ |
 | **Primes up to 15,000 (Trial Division)** | **0.00075 s** | 0.01115 s | ⚡ **Zython** | **14.9x Faster** ⚡ |
 | **Taylor Series ($e^{3.5}$, 30 terms)** | **0.00000 s** | 0.00002 s | ⚡ **Zython** | **Sub-microsecond execution (< 1 µs)** |
+| **Arbitrary Precision (`2**64`)** | **`18446744073709551616`** | `18446744073709551616` | 🤝 **Parity** | **Exact match (PyBigInt)** |
+| **Decorator Pattern (`@dec`)** | **Supported** | Supported | 🤝 **Parity** | **Exact match** |
+| **Context Managers (`with`)** | **Supported** | Supported | 🤝 **Parity** | **Exact match** |
 | **Cold Startup Latency** | **< 1.0 ms** | 10.0 ms | ⚡ **Zython** | **10.0x Faster** 🚀 |
 | **Cold Startup Memory (Peak RSS)** | **3,512 KB (~3.5 MB)** | 10,528 KB (~10.5 MB) | ⚡ **Zython** | **3.0x Less RAM (67% Savings)** 💾 |
 | **Function Call in Loop (400k calls)** | **0.00993 s** | 0.02509 s | ⚡ **Zython** | **2.53x Faster** ⚡ |

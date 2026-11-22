@@ -23,7 +23,7 @@ pub fn main(init: std.process.Init) !void {
     const first_arg = args[1];
 
     if (std.mem.eql(u8, first_arg, "-v") or std.mem.eql(u8, first_arg, "--version")) {
-        try stdout.print("Zython 0.5.0 (Python 3.15.0 compatibility engine, built with Zig 0.17.1)\n", .{});
+        try stdout.print("Zython 0.6.0 (Python 3.15.0 compatibility engine, built with Zig 0.17.1)\n", .{});
         try stdout.flush();
         return;
     }

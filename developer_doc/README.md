@@ -12,8 +12,9 @@ Welcome to the internal engineering documentation and architectural reference fo
 | [**2. Phase 2 Architecture (v0.2.0)**](file:///c:/Users/DELL/Downloads/zython/developer_doc/02_current_architecture_v0.2.0.md) | Optimized Architecture & Bugfixes | • Monomorphic inline caching (MIC)<br>• Expanded fast slots (32 locals, 16 attributes)<br>• Zero-allocation method dispatch<br>• Slicing, f-strings, exception matching<br>• Initial benchmark baselines vs CPython 3.14 |
 | [**3. Future Architecture & JIT Blueprint**](file:///c:/Users/DELL/Downloads/zython/developer_doc/03_future_architecture_v0.3.0_to_v0.5.0.md) | Blueprint to 50× – 100× Speedup | • Phase 3 Bytecode VM (**Delivered**)<br>• Phase 4 Adaptive Specialization (**Delivered**)<br>• Phase 5 Copy-and-Patch Native JIT Compiler (**Delivered**)<br>• NaN-boxing 64-bit word value model |
 | [**4. Phase 5 Architecture (v0.5.0)**](file:///c:/Users/DELL/Downloads/zython/developer_doc/04_phase5_copy_and_patch_jit_v0.5.0.md) | Native JIT Compiler & 55.2× Speedup | • Copy-and-Patch JIT compilation<br>• Executable memory arena (`mmap/PROT_EXEC`)<br>• Binary machine code stencils<br>• Empirical 55.2× speedup on fib(26) |
-| [**5. Master Achievements & Bug Audit**](file:///c:/Users/DELL/Downloads/zython/developer_doc/achievements.md) | Comprehensive Audit & Fix Records | • BUG-01 through BUG-08 root causes & fixes<br>• Phase 3 Bytecode VM achievements<br>• Phase 4 Quickening & PIC achievements<br>• Phase 5 JIT compiler achievements & 55.2× speedup |
-| [**6. Master Roadmap & Completion Matrix**](file:///c:/Users/DELL/Downloads/zython/developer_doc/roadmap.md) | Execution Plan & Milestones | • Phases 1 through 5 marked 100% COMPLETE<br>• Phase 6 Traced Polymorphic JIT specification<br>• Full language feature compatibility matrix |
+| [**5. Phase 6 Architecture (v0.6.0)**](file:///c:/Users/DELL/Downloads/zython/developer_doc/05_phase6_bignums_decorators_and_context_managers_v0.6.0.md) | Bignums, Context Managers & Decorators | • Multi-limb arbitrary precision (`PyBigInt`)<br>• `with EXPR as VAR:` context managers<br>• `@decorator` syntax wrapping<br>• 100% parity across all edge cases |
+| [**6. Master Achievements & Bug Audit**](file:///c:/Users/DELL/Downloads/zython/developer_doc/achievements.md) | Comprehensive Audit & Fix Records | • BUG-01 through BUG-08 root causes & fixes<br>• Phase 4 Quickening & PIC achievements<br>• Phase 5 JIT compiler achievements & 55.2× speedup<br>• Phase 6 Bignum, context manager & decorator audit |
+| [**7. Master Roadmap & Completion Matrix**](file:///c:/Users/DELL/Downloads/zython/developer_doc/roadmap.md) | Execution Plan & Milestones | • Phases 1 through 6 marked 100% COMPLETE<br>• Phase 7 Coroutines & stackless generators specification<br>• Full language feature compatibility matrix |
 
 ---
 
@@ -51,7 +52,7 @@ flowchart LR
         E4 --> F4["1.35x - 1.79x Faster Loops"]
     end
 
-    subgraph Phase5 ["v0.5.0: Native JIT (✅ Current)"]
+    subgraph Phase5 ["v0.5.0: Native JIT (✅)"]
         A5["Hot Bytecode Chunks"] --> B5["Copy-and-Patch JIT Compiler"]
         B5 --> C5["Binary Machine Stencils"]
         C5 --> D5["Executable Memory Arena"]
@@ -59,10 +60,16 @@ flowchart LR
         E5 --> F5["55.2x Faster fib(26)"]
     end
 
-    subgraph Phase6 ["v0.6.0: Traced JIT (⏳ Planned)"]
-        A6["Hot Loops (>50 iters)"] --> B6["Trace JIT Recorder"]
-        B6 --> C6["Arbitrary-Precision Bignums"]
-        C6 --> D6["Decorators & Coroutines"]
+    subgraph Phase6 ["v0.6.0: Bignums & Decorators (✅ Current)"]
+        A6["Language Expansion"] --> B6["Arbitrary-Precision Bignum"]
+        B6 --> C6["Context Managers (with)"]
+        C6 --> D6["Decorators (@dec)"]
+        D6 --> E6["100% Edge Case Parity"]
+    end
+
+    subgraph Phase7 ["v0.7.0: Coroutines (⏳ Planned)"]
+        A7["Async Grammar"] --> B7["Stackless Generators"]
+        B7 --> C7["Async/Await Runtime"]
     end
 
     Phase1 --> Phase2
@@ -70,10 +77,7 @@ flowchart LR
     Phase3 --> Phase4
     Phase4 --> Phase5
     Phase5 --> Phase6
-```
-    Phase2 --> Phase3
-    Phase3 --> Phase4
-    Phase4 --> Phase5
+    Phase6 --> Phase7
 ```
 
 ---

@@ -88,9 +88,30 @@ has_1 = 1 in s_mut
 has_3 = 3 in s_mut
 print("9. Set add/remove: contains 1 =", has_1, "contains 3 =", has_3)
 
-# 10. Remaining Syntax Scope
-print("10. Remaining Syntax Scope (Deferred to Future Releases):")
-print("   - Arbitrary-precision Bignums (integers > 64-bit wrap in Zython)")
-print("   - Decorators (@decorator), 'with' statement context managers")
-print("   - Generators / yield, and async/await")
+# 10. Decorator Execution (@decorator)
+def make_bold(fn):
+    def wrapper(text):
+        return "[" + fn(text) + "]"
+    return wrapper
+
+@make_bold
+def greet(name):
+    return "Hello " + name
+
+print("10. Decorator Execution: greet('Zython') =", greet("Zython"))
+
+# 11. Context Manager ('with expr as var:')
+class ScopeGuard:
+    def __enter__(self):
+        return 777
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+with ScopeGuard() as guard_val:
+    print("11. Context Manager with 'with': Resource =", guard_val)
+
+# 12. Remaining Roadmap Scope (Future Releases)
+print("12. Future Scope Roadmap:")
+print("   - Generators / yield frame suspension")
+print("   - Async/await coroutine scheduler")
 print("Ground reality edge-cases evaluation complete.")

@@ -95,6 +95,7 @@ pub const Expr = union(enum) {
     lambda: struct { params: [][]const u8, body: *Expr },
     list_comp: ListComp,
     f_string: FString,
+    yield_expr: ?*Expr,
 };
 
 pub const Param = struct {
@@ -139,6 +140,12 @@ pub const Stmt = union(enum) {
     def_stmt: struct {
         name: []const u8,
         params: []Param,
+        body: []Stmt,
+        decorators: []*Expr = &.{},
+    },
+    with_stmt: struct {
+        context_expr: *Expr,
+        optional_vars: ?*Expr,
         body: []Stmt,
     },
     class_stmt: struct {

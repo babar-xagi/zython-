@@ -360,10 +360,35 @@ pub const PyModule = struct {
     }
 };
 
+pub const PyBigInt = struct {
+    managed: std.math.big.int.Managed,
+
+    pub fn init(allocator: Allocator, val: i64) !*PyBigInt {
+        const self = try allocator.create(PyBigInt);
+        self.managed = try std.math.big.int.Managed.init(allocator);
+        try self.managed.set(val);
+        return self;
+    }
+
+    pub fn initFromManaged(allocator: Allocator, m: std.math.big.int.Managed) !*PyBigInt {
+        const self = try allocator.create(PyBigInt);
+        self.managed = m;
+        return self;
+    }
+
+    pub fn toString(self: *PyBigInt, allocator: Allocator) Allocator.Error![]const u8 {
+        return self.managed.toString(allocator, 10, .lower) catch |err| switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            error.InvalidBase => unreachable,
+        };
+    }
+};
+
 pub const Value = union(enum) {
     none,
     bool: bool,
     int: i64,
+    bignum: *PyBigInt,
     float: f64,
     string: *PyString,
     list: *PyList,
@@ -409,6 +434,7 @@ pub const Value = union(enum) {
             .none => false,
             .bool => |b| b,
             .int => |i| i != 0,
+            .bignum => |b| !b.managed.eqlZero(),
             .float => |f| f != 0.0,
             .string => |s| s.bytes.len > 0,
             .list => |l| l.items.items.len > 0,
@@ -425,7 +451,7 @@ pub const Value = union(enum) {
         return switch (self) {
             .none => "NoneType",
             .bool => "bool",
-            .int => "int",
+            .int, .bignum => "int",
             .float => "float",
             .string => "str",
             .list => "list",
@@ -456,8 +482,22 @@ pub const Value = union(enum) {
             },
             .int => |i| {
                 if (other == .int) return i == other.int;
+                if (other == .bignum) {
+                    if (other.bignum.managed.toInt(i64)) |val| {
+                        return i == val;
+                    } else |_| return false;
+                }
                 if (other == .float) return @as(f64, @floatFromInt(i)) == other.float;
                 if (other == .bool) return i == (if (other.bool) @as(i64, 1) else @as(i64, 0));
+                return false;
+            },
+            .bignum => |b| {
+                if (other == .bignum) return b.managed.eql(other.bignum.managed);
+                if (other == .int) {
+                    if (b.managed.toInt(i64)) |val| {
+                        return val == other.int;
+                    } else |_| return false;
+                }
                 return false;
             },
             .float => |f| {
@@ -527,6 +567,7 @@ pub const Value = union(enum) {
             .none => return "None",
             .bool => |b| return if (b) "True" else "False",
             .int => |i| return std.fmt.allocPrint(allocator, "{d}", .{i}),
+            .bignum => |b| return b.toString(allocator),
             .float => |f| {
                 if (f == @floor(f) and !std.math.isNan(f) and !std.math.isInf(f)) {
                     return std.fmt.allocPrint(allocator, "{d:.1}", .{f});
