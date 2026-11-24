@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Zython Logo Banner](https://img.shields.io/badge/Zython-Python%20in%20Zig-orange?style=for-the-badge&logo=zig)
-![Version](https://img.shields.io/badge/Version-v0.9.0-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v0.10.0-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 **The definitive operational manual for installing, building, utilizing, and extending Zython.**
@@ -522,6 +522,73 @@ print("lib.add_numbers(15, 27):", lib.add_numbers(15, 27))
 import sample_ext
 print("sample_ext.add(20, 22):", sample_ext.add(20, 22))
 print("sample_ext.multiply(2.5, 4.0):", sample_ext.multiply(2.5, 4.0))
+```
+
+#### 7. Native File I/O (`open()`)
+```python
+# Write and read with context manager
+with open("sample.txt", "w") as f:
+    f.write("Line 1: High speed file I/O\nLine 2: Zython native runtime\n")
+
+with open("sample.txt", "r") as f:
+    for line in f:
+        print("Read line:", line)
+```
+
+#### 8. `os` & `os.path` Modules
+```python
+import os
+
+cwd = os.getcwd()
+print("Working directory:", cwd)
+print("File exists:", os.path.exists("sample.txt"))
+print("Is regular file:", os.path.isfile("sample.txt"))
+print("Path basename:", os.path.basename("/home/user/script.py"))
+print("Directory name:", os.path.dirname("/home/user/script.py"))
+print("Split extension:", os.path.splitext("data.json"))
+```
+
+#### 9. `socket` Module (TCP Networking)
+```python
+import socket
+
+# TCP Server creation
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind(("127.0.0.1", 8080))
+server.listen(5)
+
+# TCP Client connection
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+    client.connect(("127.0.0.1", 8080))
+    client.sendall("Hello from client")
+```
+
+#### 10. `json` Module (Serialization)
+```python
+import json
+
+data = {"name": "Zython", "version": 10, "native": True, "tags": ["jit", "io"]}
+json_str = json.dumps(data)
+print("Encoded JSON:", json_str)
+
+parsed = json.loads(json_str)
+print("Decoded name:", parsed["name"])
+```
+
+#### 11. `hashlib` & `random` Modules
+```python
+import hashlib
+import random
+
+# Cryptographic digests
+print("SHA256:", hashlib.sha256("hello").hexdigest())
+print("MD5:   ", hashlib.md5("hello").hexdigest())
+print("SHA1:  ", hashlib.sha1("hello").hexdigest())
+
+# Pseudo-random numbers
+print("Random float:", random.random())
+print("Random int:  ", random.randint(1, 100))
+print("Random choice:", random.choice(["red", "green", "blue"]))
 ```
 
 ---

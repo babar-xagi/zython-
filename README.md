@@ -4,14 +4,14 @@
 
 [![Zig](https://img.shields.io/badge/Zig-0.17.1-orange.svg?logo=zig)](https://ziglang.org/)
 [![Python](https://img.shields.io/badge/Python-3.15%20Compatibility-blue.svg?logo=python)](https://python.org/)
-[![Release](https://img.shields.io/badge/Release-v0.9.0%20(Phase%209)-brightgreen.svg)]()
+[![Release](https://img.shields.io/badge/Release-v0.10.0%20(Phase%2010)-brightgreen.svg)]()
 [![Performance](https://img.shields.io/badge/Compute-39.2x--55.2x%20Faster%20than%20CPython-success.svg)]()
 [![Loops](https://img.shields.io/badge/Loops-1.46x%20--%202.12x%20Faster%20than%20CPython-success.svg)]()
 [![Memory](https://img.shields.io/badge/Peak%20RSS-3.5%20MB%20(67%25%20Less%20RAM)-blueviolet.svg)]()
 [![Build](https://img.shields.io/badge/Binary-Fully%20Static%20(0%20Deps)-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
-**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with C-Extension FFI & Native Module Bridge (`ctypes`, CPython C-API compatibility), Native Multi-Threading & ThreadPoolExecutor (`threading`, `concurrent.futures`), Stackless Generators, Coroutines & Async/Await (`asyncio.run`), a Copy-and-Patch Native JIT Compiler, Multi-Limb Arbitrary-Precision Bignums, Context Managers, Syntactic Decorators, and an Adaptive Bytecode VM.**
+**A clean, memory-safe, ultra-high-throughput Python runtime engineered from the ground up in pure Zig 0.17 with Native I/O & Network Sockets (`open`, `os`, `socket`, `json`, `random`, `hashlib`), C-Extension FFI & Native Module Bridge (`ctypes`, CPython C-API compatibility), Native Multi-Threading & ThreadPoolExecutor (`threading`, `concurrent.futures`), Stackless Generators, Coroutines & Async/Await (`asyncio.run`), a Copy-and-Patch Native JIT Compiler, Multi-Limb Arbitrary-Precision Bignums, Context Managers, Syntactic Decorators, and an Adaptive Bytecode VM.**
 
 [Overview](#-overview) •
 [Installation & User Guide](docs/user_guide.md) •
@@ -32,12 +32,14 @@
 
 ### 🎯 Why Zython?
 
-| Feature | ⚡ Zython 0.9.0 (C-Extensions, Threading, JIT & Async) | 🐍 Standard CPython 3.14.4 |
+| Feature | ⚡ Zython 0.10.0 (Native I/O, Sockets, JSON, Threading, JIT) | 🐍 Standard CPython 3.14.4 |
 |---|:---:|:---:|
 | **Recursive Fibonacci (`fib(26)`)** | **0.00044 s** ⚡ | 0.01726 s (**Zython is 39.2× faster**) 🏆 |
 | **Insertion Sort (1,500 elements)** | **0.00237 s** ⚡ | 0.06231 s (**Zython is 26.3× faster**) ⚡ |
 | **Prime Sieve (15,000 items)** | **0.00076 s** ⚡ | 0.01180 s (**Zython is 15.5× faster**) ⚡ |
 | **Taylor Series ($e^{3.5}$, 30 terms)** | **< 1 µs** ⚡ | 20 µs (**Sub-microsecond FP**) |
+| **Native File I/O & Sockets** | **`open()`, `os`, `os.path`, `socket` (Zero Overhead)** 🌐 | Standard libc bindings |
+| **Serialization & Hashing** | **`json` (loads/dumps), `hashlib`, `random` (Native)** 📦 | Standard CPython modules |
 | **C-Extension FFI & Dynamic Modules** | **`ctypes` (CDLL, sizeof) & CPython C-API (`.so`)** 🔌 | Standard CPython C-API & ctypes |
 | **Native Multi-Threading & Pools** | **`threading`, `concurrent.futures` (GIL-Free)** 🚀 | GIL Bottlenecked (Global Interpreter Lock) |
 | **Stackless Generators (`yield`)** | **`val1=3, val2=2, val3=1`** ✅ | `val1=3, val2=2, val3=1` (100% Parity) |
@@ -237,8 +239,13 @@ For the comprehensive technical roadmap and architectural documentation, see [`d
 - Loops with nested `break` and `continue`.
 
 ### 🔹 Built-in Functions & Modules
-- **Built-in Functions**: `print`, `len`, `range`, `type`, `int`, `float`, `str`, `repr`, `bool`, `list`, `tuple`, `dict`, `set`, `sum`, `min`, `max`, `abs`, `round`, `pow`, `ord`, `chr`, `callable`, `isinstance`, `enumerate`, `zip`, `reversed`, `sorted`, `next`, `iter`.
+- **Built-in Functions**: `open`, `print`, `len`, `range`, `type`, `int`, `float`, `str`, `repr`, `bool`, `list`, `tuple`, `dict`, `set`, `sum`, `min`, `max`, `abs`, `round`, `pow`, `ord`, `chr`, `callable`, `isinstance`, `enumerate`, `zip`, `reversed`, `sorted`, `next`, `iter`.
 - **Standard Modules**:
+  - `os` & `os.path`: `getcwd`, `chdir`, `listdir`, `mkdir`, `remove`, `unlink`, `rmdir`, `rename`, `system`, `getenv`, `environ`, `exists`, `isfile`, `isdir`, `join`, `basename`, `dirname`, `split`, `splitext`.
+  - `socket`: `socket()`, `AF_INET`, `SOCK_STREAM`, `SOCK_DGRAM`, `SOL_SOCKET`, `SO_REUSEADDR`, `bind`, `listen`, `accept`, `connect`, `send`, `sendall`, `recv`, `close`.
+  - `json`: `dumps()`, `loads()`.
+  - `hashlib`: `sha256()`, `md5()`, `sha1()`.
+  - `random`: `random()`, `randint()`, `uniform()`, `choice()`, `seed()`.
   - `ctypes`: `CDLL`, `cdll`, `sizeof`, `byref`, `pointer`, `c_int`, `c_long`, `c_double`, `c_float`, `c_char_p`, `c_void_p`, `c_bool`.
   - `threading`: `Thread`, `Lock`, `RLock`, `Semaphore`, `Event`, `get_ident()`, `current_thread()`, `active_count()`.
   - `concurrent.futures`: `ThreadPoolExecutor`, `as_completed()`, `Future`.
@@ -269,7 +276,7 @@ The standalone binary will be generated at `./zig-out/bin/zython`.
 ./zig-out/bin/zython
 ```
 ```python
-Zython 0.9.0 (Python 3.15 compatibility layer, Zig 0.17.1)
+Zython 0.10.0 (Python 3.15 compatibility layer, Zig 0.17.1)
 Type 'exit()' to exit.
 >>> [x * x for x in range(5)]
 [0, 1, 4, 9, 16]
@@ -288,8 +295,9 @@ Type 'exit()' to exit.
 
 # Run test suite
 ./zig-out/bin/zython tests/final_pure_tests/01_compute_and_algorithms.py
-./zig-out/bin/zython tests/final_pure_tests/04_loop_mechanics_ground_reality.py
 ./zig-out/bin/zython tests/final_pure_tests/06_multithreading_and_concurrency.py
+./zig-out/bin/zython tests/final_pure_tests/07_c_extensions_and_ctypes.py
+./zig-out/bin/zython tests/final_pure_tests/08_io_os_socket_and_json.py
 ```
 
 ---
@@ -312,6 +320,7 @@ zython-/
 │   ├── 06_phase7_generators_coroutines_and_async_v0.7.0.md        # Phase 7 Generators & async
 │   ├── 07_phase8_multithreading_and_threadpool_v0.8.0.md         # Phase 8 Concurrency & Pools
 │   ├── 08_phase9_c_extensions_and_ctypes_v0.9.0.md              # Phase 9 C-Extensions & ctypes FFI
+│   ├── 09_phase10_io_os_socket_and_json_v0.10.0.md             # Phase 10 Native I/O, OS, Sockets & JSON
 │   ├── achievements.md    # Master achievements and bug resolution scorecard
 │   └── roadmap.md         # Multi-phase engineering roadmap and completion matrix
 ├── src/

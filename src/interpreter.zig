@@ -122,6 +122,26 @@ pub const Interpreter = struct {
         const mod_ctypes = try builtins_mod.makeCtypesModule(allocator);
         try self.modules.put("ctypes", mod_ctypes);
 
+        const mod_os = try builtins_mod.makeOsModule(allocator);
+        try self.modules.put("os", mod_os);
+        if (mod_os == .module) {
+            if (mod_os.module.attributes.get("path")) |path_val| {
+                try self.modules.put("os.path", path_val);
+            }
+        }
+
+        const mod_socket = try builtins_mod.makeSocketModule(allocator);
+        try self.modules.put("socket", mod_socket);
+
+        const mod_json = try builtins_mod.makeJsonModule(allocator);
+        try self.modules.put("json", mod_json);
+
+        const mod_random = try builtins_mod.makeRandomModule(allocator);
+        try self.modules.put("random", mod_random);
+
+        const mod_hashlib = try builtins_mod.makeHashlibModule(allocator);
+        try self.modules.put("hashlib", mod_hashlib);
+
         return self;
     }
 
@@ -759,6 +779,34 @@ pub const Interpreter = struct {
                             cached_slot = env.getSlotPtr(target_ident.?);
                         }
                         while (it.next(self.allocator)) |item| {
+                            if (cached_slot) |slot| {
+                                slot.* = item;
+                            } else {
+                                try self.assignTarget(f.target, item, env);
+                            }
+                            const res = try self.evalSuite(f.body, env);
+                            switch (res) {
+                                .break_flow => {
+                                    broke = true;
+                                    break;
+                                },
+                                .continue_flow => continue,
+                                .return_flow => return res,
+                                else => {},
+                            }
+                        }
+                    },
+                    .file => |fl| {
+                        const target_ident: ?[]const u8 = if (f.target.* == .identifier) f.target.identifier.name else null;
+                        var cached_slot: ?*Value = if (target_ident) |ti| env.getSlotPtr(ti) else null;
+                        if (cached_slot == null and target_ident != null) {
+                            try env.set(target_ident.?, .none);
+                            cached_slot = env.getSlotPtr(target_ident.?);
+                        }
+                        while (true) {
+                            const line = fl.readline() catch break;
+                            if (line.len == 0) break;
+                            const item = try Value.makeString(self.allocator, line);
                             if (cached_slot) |slot| {
                                 slot.* = item;
                             } else {
@@ -2650,6 +2698,335 @@ pub const Interpreter = struct {
                         try l.items.append(self.allocator, Value{ .c_type = at });
                     }
                     return Value{ .list = l };
+                }
+                return error.AttributeError;
+            },
+            .file => |fl| {
+                if (std.mem.eql(u8, attr, "name")) return Value.makeString(self.allocator, fl.path);
+                if (std.mem.eql(u8, attr, "mode")) return Value.makeString(self.allocator, fl.mode);
+                if (std.mem.eql(u8, attr, "closed")) return Value.makeBool(fl.is_closed);
+
+                if (std.mem.eql(u8, attr, "read")) {
+                    const file_read = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            var max_sz: ?usize = null;
+                            if (args.len > 1 and args[1] == .int) {
+                                if (args[1].int >= 0) {
+                                    max_sz = @intCast(args[1].int);
+                                }
+                            }
+                            const content = try f.read(max_sz);
+                            return Value.makeString(allocator, content);
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "read", .func = file_read };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "readline")) {
+                    const file_readline = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            const line = try f.readline();
+                            return Value.makeString(allocator, line);
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "readline", .func = file_readline };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "readlines")) {
+                    const file_readlines = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            const l = try f.readlines();
+                            return Value{ .list = l };
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "readlines", .func = file_readlines };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "write")) {
+                    const file_write = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            const s = try args[1].str(allocator);
+                            const written = try f.write(s);
+                            return Value.makeInt(@intCast(written));
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "write", .func = file_write };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "writelines")) {
+                    const file_writelines = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            switch (args[1]) {
+                                .list => |l| try f.writelines(l.items.items),
+                                .tuple => |t| try f.writelines(t.items),
+                                else => return error.TypeError,
+                            }
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "writelines", .func = file_writelines };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "seek")) {
+                    const file_seek = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            if (args[1] != .int) return error.TypeError;
+                            var whence: i32 = 0;
+                            if (args.len > 2 and args[2] == .int) {
+                                whence = @intCast(args[2].int);
+                            }
+                            try f.seek(args[1].int, whence);
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "seek", .func = file_seek };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "tell")) {
+                    const file_tell = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            const pos = try f.tell();
+                            return Value.makeInt(pos);
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "tell", .func = file_tell };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "flush")) {
+                    const file_flush = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            f.flush();
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "flush", .func = file_flush };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "close") or std.mem.eql(u8, attr, "__exit__")) {
+                    const file_close = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .file) return error.TypeError;
+                            const f = args[0].file;
+                            f.close();
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "close", .func = file_close };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "__enter__")) {
+                    const file_enter = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1) return error.TypeError;
+                            return args[0];
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "__enter__", .func = file_enter };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .file = fl }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                return error.AttributeError;
+            },
+            .socket => |sock| {
+                if (std.mem.eql(u8, attr, "connect")) {
+                    const sock_connect = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .socket) return error.TypeError;
+                            const s = args[0].socket;
+                            var host: []const u8 = "127.0.0.1";
+                            var port: u16 = 80;
+                            if (args[1] == .tuple and args[1].tuple.items.len >= 2) {
+                                const h_str = try args[1].tuple.items[0].str(allocator);
+                                host = h_str;
+                                if (args[1].tuple.items[1] == .int) {
+                                    port = @intCast(args[1].tuple.items[1].int);
+                                }
+                            }
+                            try s.connect(host, port);
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "connect", .func = sock_connect };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .socket = sock }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "bind")) {
+                    const sock_bind = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .socket) return error.TypeError;
+                            const s = args[0].socket;
+                            var host: []const u8 = "127.0.0.1";
+                            var port: u16 = 0;
+                            if (args[1] == .tuple and args[1].tuple.items.len >= 2) {
+                                const h_str = try args[1].tuple.items[0].str(allocator);
+                                host = h_str;
+                                if (args[1].tuple.items[1] == .int) {
+                                    port = @intCast(args[1].tuple.items[1].int);
+                                }
+                            }
+                            try s.bind(host, port);
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "bind", .func = sock_bind };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .socket = sock }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "listen")) {
+                    const sock_listen = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .socket) return error.TypeError;
+                            const s = args[0].socket;
+                            var backlog: i32 = 128;
+                            if (args.len > 1 and args[1] == .int) {
+                                backlog = @intCast(args[1].int);
+                            }
+                            try s.listen(backlog);
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "listen", .func = sock_listen };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .socket = sock }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "accept")) {
+                    const sock_accept = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .socket) return error.TypeError;
+                            const s = args[0].socket;
+                            const client_sock = try s.accept();
+                            const addr_tup = try allocator.alloc(Value, 2);
+                            addr_tup[0] = try Value.makeString(allocator, "127.0.0.1");
+                            addr_tup[1] = Value.makeInt(0);
+                            const addr_pytup = try allocator.create(PyTuple);
+                            addr_pytup.* = .{ .items = addr_tup };
+                            const addr_val = Value{ .tuple = addr_pytup };
+
+                            const res_tup = try allocator.alloc(Value, 2);
+                            res_tup[0] = Value{ .socket = client_sock };
+                            res_tup[1] = addr_val;
+                            const res_pytup = try allocator.create(PyTuple);
+                            res_pytup.* = .{ .items = res_tup };
+                            return Value{ .tuple = res_pytup };
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "accept", .func = sock_accept };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .socket = sock }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "send") or std.mem.eql(u8, attr, "sendall")) {
+                    const sock_send = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .socket) return error.TypeError;
+                            const s = args[0].socket;
+                            const data = try args[1].str(allocator);
+                            const sent = try s.send(data);
+                            return Value.makeInt(@intCast(sent));
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = attr, .func = sock_send };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .socket = sock }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "recv")) {
+                    const sock_recv = struct {
+                        fn call(allocator: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 2 or args[0] != .socket) return error.TypeError;
+                            const s = args[0].socket;
+                            if (args[1] != .int) return error.TypeError;
+                            const sz: usize = @intCast(@max(0, args[1].int));
+                            const buf = try s.recv(sz);
+                            return Value.makeString(allocator, buf);
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "recv", .func = sock_recv };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .socket = sock }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "close") or std.mem.eql(u8, attr, "__exit__")) {
+                    const sock_close = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1 or args[0] != .socket) return error.TypeError;
+                            const s = args[0].socket;
+                            s.close();
+                            return .none;
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "close", .func = sock_close };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .socket = sock }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
+                }
+                if (std.mem.eql(u8, attr, "__enter__")) {
+                    const sock_enter = struct {
+                        fn call(_: Allocator, _: ?*anyopaque, args: []const Value, _: []const DictEntry) anyerror!Value {
+                            if (args.len < 1) return error.TypeError;
+                            return args[0];
+                        }
+                    }.call;
+                    const b = try self.allocator.create(PyBuiltin);
+                    b.* = .{ .name = "__enter__", .func = sock_enter };
+                    const bm = try self.allocator.create(PyBoundMethod);
+                    bm.* = .{ .instance = .{ .socket = sock }, .function = .{ .builtin = b } };
+                    return Value{ .bound_method = bm };
                 }
                 return error.AttributeError;
             },

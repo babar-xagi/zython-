@@ -763,6 +763,255 @@ pub const PyBigInt = struct {
     }
 };
 
+extern "c" fn fgetc(stream: *std.c.FILE) c_int;
+extern "c" fn fseek(stream: *std.c.FILE, offset: c_long, whence: c_int) c_int;
+extern "c" fn ftell(stream: *std.c.FILE) c_long;
+extern "c" fn fflush(stream: *std.c.FILE) c_int;
+
+pub const PyFile = struct {
+    path: []const u8,
+    mode: []const u8,
+    handle: ?*std.c.FILE,
+    is_closed: bool = false,
+    allocator: Allocator,
+
+    pub fn open(allocator: Allocator, path: []const u8, mode: []const u8) !*PyFile {
+        const path_z = try allocator.allocSentinel(u8, path.len, 0);
+        defer allocator.free(path_z);
+        @memcpy(path_z, path);
+
+        const mode_z = try allocator.allocSentinel(u8, mode.len, 0);
+        defer allocator.free(mode_z);
+        @memcpy(mode_z, mode);
+
+        const f = std.c.fopen(path_z.ptr, mode_z.ptr);
+        if (f == null) return error.FileNotFound;
+
+        const path_copy = try allocator.dupe(u8, path);
+        const mode_copy = try allocator.dupe(u8, mode);
+
+        const self = try allocator.create(PyFile);
+        self.* = .{
+            .path = path_copy,
+            .mode = mode_copy,
+            .handle = f,
+            .is_closed = false,
+            .allocator = allocator,
+        };
+        return self;
+    }
+
+    pub fn read(self: *PyFile, max_size: ?usize) ![]const u8 {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        const h = self.handle.?;
+
+        if (max_size) |sz| {
+            const buf = try self.allocator.alloc(u8, sz);
+            const n = std.c.fread(buf.ptr, 1, sz, h);
+            if (n < sz) {
+                return self.allocator.realloc(buf, n);
+            }
+            return buf;
+        }
+
+        var list: std.ArrayList(u8) = .empty;
+        var chunk: [4096]u8 = undefined;
+        while (true) {
+            const n = std.c.fread(&chunk, 1, 4096, h);
+            if (n == 0) break;
+            try list.appendSlice(self.allocator, chunk[0..n]);
+            if (n < 4096) break;
+        }
+        return list.toOwnedSlice(self.allocator);
+    }
+
+    pub fn readline(self: *PyFile) ![]const u8 {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        const h = self.handle.?;
+        var list: std.ArrayList(u8) = .empty;
+        while (true) {
+            const c = fgetc(h);
+            if (c == -1) break;
+            const b: u8 = @intCast(c);
+            try list.append(self.allocator, b);
+            if (b == '\n') break;
+        }
+        return list.toOwnedSlice(self.allocator);
+    }
+
+    pub fn readlines(self: *PyFile) !*PyList {
+        const py_list = try PyList.init(self.allocator);
+        while (true) {
+            const line = try self.readline();
+            if (line.len == 0) break;
+            const str_val = try Value.makeString(self.allocator, line);
+            try py_list.append(self.allocator, str_val);
+        }
+        return py_list;
+    }
+
+    pub fn write(self: *PyFile, data: []const u8) !usize {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        const h = self.handle.?;
+        return std.c.fwrite(data.ptr, 1, data.len, h);
+    }
+
+    pub fn writelines(self: *PyFile, lines: []const Value) !void {
+        for (lines) |item| {
+            const s = try item.str(self.allocator);
+            _ = try self.write(s);
+        }
+    }
+
+    pub fn seek(self: *PyFile, offset: i64, whence: i32) !void {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        const res = fseek(self.handle.?, @intCast(offset), whence);
+        if (res != 0) return error.OSError;
+    }
+
+    pub fn tell(self: *PyFile) !i64 {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        const res = ftell(self.handle.?);
+        if (res < 0) return error.OSError;
+        return @intCast(res);
+    }
+
+    pub fn flush(self: *PyFile) void {
+        if (!self.is_closed and self.handle != null) {
+            _ = fflush(self.handle.?);
+        }
+    }
+
+    pub fn close(self: *PyFile) void {
+        if (!self.is_closed and self.handle != null) {
+            _ = std.c.fclose(self.handle.?);
+            self.handle = null;
+            self.is_closed = true;
+        }
+    }
+};
+
+pub const SockAddrIn = extern struct {
+    sin_family: u16 = 2,
+    sin_port: u16 = 0,
+    sin_addr: u32 = 0,
+    sin_zero: [8]u8 = [_]u8{ 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+pub const PySocket = struct {
+    handle: ?c_int,
+    family: i32,
+    type: i32,
+    proto: i32,
+    is_closed: bool = false,
+    allocator: Allocator,
+
+    pub fn create(allocator: Allocator, family: i32, sock_type: i32, proto: i32) !*PySocket {
+        const fd = std.c.socket(@intCast(family), @intCast(sock_type), @intCast(proto));
+        if (fd < 0) return error.OSError;
+
+        const self = try allocator.create(PySocket);
+        self.* = .{
+            .handle = fd,
+            .family = family,
+            .type = sock_type,
+            .proto = proto,
+            .is_closed = false,
+            .allocator = allocator,
+        };
+        return self;
+    }
+
+    pub fn connect(self: *PySocket, host: []const u8, port: u16) !void {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        var addr = SockAddrIn{
+            .sin_family = 2,
+            .sin_port = std.mem.nativeToBig(u16, port),
+            .sin_addr = 0x0100007f, // loopback 127.0.0.1
+        };
+
+        if (!std.mem.eql(u8, host, "127.0.0.1") and !std.mem.eql(u8, host, "localhost")) {
+            addr.sin_addr = 0x0100007f;
+        }
+
+        const ptr: *const std.c.sockaddr = @ptrCast(&addr);
+        const res = std.c.connect(self.handle.?, ptr, @sizeOf(SockAddrIn));
+        if (res < 0) return error.ConnectionRefused;
+    }
+
+    pub fn bind(self: *PySocket, host: []const u8, port: u16) !void {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        var addr = SockAddrIn{
+            .sin_family = 2,
+            .sin_port = std.mem.nativeToBig(u16, port),
+            .sin_addr = 0x0100007f,
+        };
+        if (!std.mem.eql(u8, host, "127.0.0.1") and !std.mem.eql(u8, host, "localhost") and host.len > 0) {
+            addr.sin_addr = 0; // INADDR_ANY
+        }
+
+        var opt: c_int = 1;
+        _ = std.c.setsockopt(self.handle.?, std.c.SOL.SOCKET, std.c.SO.REUSEADDR, &opt, @sizeOf(c_int));
+
+        const ptr: *const std.c.sockaddr = @ptrCast(&addr);
+        const res = std.c.bind(self.handle.?, ptr, @sizeOf(SockAddrIn));
+        if (res < 0) return error.OSError;
+    }
+
+    pub fn listen(self: *PySocket, backlog: i32) !void {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        const res = std.c.listen(self.handle.?, @intCast(backlog));
+        if (res < 0) return error.OSError;
+    }
+
+    pub fn accept(self: *PySocket) !*PySocket {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        var client_addr: SockAddrIn = undefined;
+        var addr_len: std.c.socklen_t = @sizeOf(SockAddrIn);
+        const ptr: *std.c.sockaddr = @ptrCast(&client_addr);
+        const client_fd = std.c.accept(self.handle.?, ptr, &addr_len);
+        if (client_fd < 0) return error.OSError;
+
+        const client = try self.allocator.create(PySocket);
+        client.* = .{
+            .handle = client_fd,
+            .family = self.family,
+            .type = self.type,
+            .proto = self.proto,
+            .is_closed = false,
+            .allocator = self.allocator,
+        };
+        return client;
+    }
+
+    pub fn send(self: *PySocket, data: []const u8) !usize {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        const res = std.c.send(self.handle.?, data.ptr, data.len, 0);
+        if (res < 0) return error.OSError;
+        return @intCast(res);
+    }
+
+    pub fn recv(self: *PySocket, buf_size: usize) ![]const u8 {
+        if (self.is_closed or self.handle == null) return error.ValueError;
+        const buf = try self.allocator.alloc(u8, buf_size);
+        const res = std.c.recv(self.handle.?, buf.ptr, buf_size, 0);
+        if (res < 0) return error.OSError;
+        const n: usize = @intCast(res);
+        if (n < buf_size) {
+            return self.allocator.realloc(buf, n);
+        }
+        return buf;
+    }
+
+    pub fn close(self: *PySocket) void {
+        if (!self.is_closed and self.handle != null) {
+            _ = std.c.close(self.handle.?);
+            self.handle = null;
+            self.is_closed = true;
+        }
+    }
+};
+
 pub const Value = union(enum) {
     none,
     bool: bool,
@@ -793,6 +1042,8 @@ pub const Value = union(enum) {
     c_dll: *PyCDll,
     c_func: *PyCFunc,
     c_type: PyCType,
+    file: *PyFile,
+    socket: *PySocket,
     return_flow,
     break_flow,
     continue_flow,
@@ -832,7 +1083,7 @@ pub const Value = union(enum) {
             .dict => |d| d.entries.items.len > 0,
             .set => |s| s.items.items.len > 0,
             .range => |r| r.length() > 0,
-            .function, .builtin, .class, .instance, .bound_method, .module, .iterator, .generator, .coroutine, .thread, .lock, .semaphore, .event, .future, .thread_pool, .c_dll, .c_func, .c_type => true,
+            .function, .builtin, .class, .instance, .bound_method, .module, .iterator, .generator, .coroutine, .thread, .lock, .semaphore, .event, .future, .thread_pool, .c_dll, .c_func, .c_type, .file, .socket => true,
             .return_flow, .break_flow, .continue_flow => false,
         };
     }
@@ -867,6 +1118,8 @@ pub const Value = union(enum) {
             .c_dll => "CDLL",
             .c_func => "CFunction",
             .c_type => "PyCSimpleType",
+            .file => "_io.TextIOWrapper",
+            .socket => "socket.socket",
             .return_flow => "return",
             .break_flow => "break",
             .continue_flow => "continue",
@@ -1094,6 +1347,8 @@ pub const Value = union(enum) {
             .c_dll => |d| return std.fmt.allocPrint(allocator, "<CDLL '{s}', handle 0x{x}>", .{ d.name, @intFromPtr(d) }),
             .c_func => |cf| return std.fmt.allocPrint(allocator, "<_FuncPtr '{s}'>", .{cf.name}),
             .c_type => |ct| return std.fmt.allocPrint(allocator, "<class 'ctypes.{s}'>", .{ct.name()}),
+            .file => |fl| return std.fmt.allocPrint(allocator, "<_io.TextIOWrapper name='{s}' mode='{s}' encoding='utf-8'>", .{ fl.path, fl.mode }),
+            .socket => |s| return std.fmt.allocPrint(allocator, "<socket.socket fd={?d}, family={d}, type={d}>", .{ s.handle, s.family, s.type }),
             .return_flow => return "return",
             .break_flow => return "break",
             .continue_flow => return "continue",

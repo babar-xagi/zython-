@@ -2,7 +2,7 @@
 
 > **Evaluation Environment**: Linux Ubuntu (WSL2, Kernel 5.10.x, x86_64, AVX2).  
 > **Compilers / Runtimes Tested**:  
-> • **Zython 0.8.0 (Native Multi-Threading, ThreadPoolExecutor, Generators, Coroutines, Copy-and-Patch Native JIT Compiler, Bignums, Context Managers & Decorators)**: Built with pure Zig 0.17.1 (`ReleaseFast`, statically linked, 0 dynamic dependencies).  
+> • **Zython 0.10.0 (Native I/O, Sockets, JSON, Multi-Threading, ThreadPoolExecutor, Generators, Coroutines, Copy-and-Patch Native JIT Compiler, Bignums, Context Managers & Decorators)**: Built with pure Zig 0.17.1 (`ReleaseFast`, statically linked, 0 dynamic dependencies).  
 > • **CPython 3.14.4**: Standard official Python 3.14.4 runtime (`[GCC 15.2.0]`).  
 > **Profiling Instrument**: GNU `/usr/bin/time -v` (Capturing kernel-level elapsed wall time, CPU time, and OS Peak Resident Set Size).  
 > **Test Suite Directory**: [`tests/final_pure_tests/`](file:///home/xagi/Desktop/zig_com/zython-/tests/final_pure_tests/)
@@ -190,13 +190,14 @@ All functional bugs documented in [`BUGS.md`](file:///home/xagi/Desktop/zig_com/
 
 ---
 
-## 🏁 4. Final Verdict & Release v0.9.0
+## 🏁 4. Final Verdict & Release v0.10.0
 
 ### 🌟 Where Zython Dominates:
 1. **50×+ Compute Breakthrough**: **Recursive Fibonacci (`fib(26)`) runs 55.2× faster than CPython 3.14** (0.00031s vs 0.01712s) and **Insertion Sort runs 42.3× faster** (0.00159s vs 0.06731s).
 2. **Loop Mechanics Superiority**: **All 6 loop workloads execute 1.24× to 2.53× faster** than CPython 3.14 thanks to unboxed range stepping and register superinstructions (`op_load_fast_0..3`).
-3. **C-Extension FFI & Native Module Bridge**: Complete native `ctypes` implementation (`CDLL`, `cdll`, `sizeof`, `byref`, `c_*` singletons) and full CPython C-API binary compatibility layer (`src/capi.zig`) capable of loading and executing `.so` C-extensions directly.
-4. **GIL-Free Multi-Threading & Concurrency**: Spawns preemptive native OS threads (`std.Thread`), provides deadlock-free reentrant `RLock`, `Semaphore`, `Event`, and high-throughput `ThreadPoolExecutor` with true parallel execution across multi-core systems.
-5. **Ultra-Low Memory Footprint**: **67% lower peak RAM** usage across all numerical and loop workloads (~3.5 MB vs ~10.5 MB).
-6. **Sub-Millisecond Startup**: Cold startup latency (< 1.0 ms) is 10× faster than CPython, ideal for CLI tools, serverless micro-lambdas, and embedded environments.
-7. **Static Binary Portability**: A single standalone native executable (~2 MB) with dynamic shared library loading capabilities.
+3. **Native I/O, OS, Sockets & Serialization (Phase 10)**: High-speed libc `FILE*` native file I/O (`open()`, `with open(...)`, `for line in f:`), full `os` and `os.path` file system operations, POSIX TCP loopback networking (`socket`), standard `json` serialization (dumps/loads), RFC-verified `hashlib` hashing, and PRNG `random`.
+4. **C-Extension FFI & Native Module Bridge**: Complete native `ctypes` implementation (`CDLL`, `cdll`, `sizeof`, `byref`, `c_*` singletons) and full CPython C-API binary compatibility layer (`src/capi.zig`) capable of loading and executing `.so` C-extensions directly.
+5. **GIL-Free Multi-Threading & Concurrency**: Spawns preemptive native OS threads (`std.Thread`), provides deadlock-free reentrant `RLock`, `Semaphore`, `Event`, and high-throughput `ThreadPoolExecutor` with true parallel execution across multi-core systems.
+6. **Ultra-Low Memory Footprint**: **67% lower peak RAM** usage across all numerical and loop workloads (~3.5 MB vs ~10.5 MB).
+7. **Sub-Millisecond Startup**: Cold startup latency (< 1.0 ms) is 10× faster than CPython, ideal for CLI tools, serverless micro-lambdas, and embedded environments.
+8. **Static Binary Portability**: A single standalone native executable (~2 MB) with dynamic shared library loading capabilities.
