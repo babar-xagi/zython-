@@ -1,0 +1,35 @@
+{
+ "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+ "reps": 1,
+ "results": [
+  {
+   "name": "p14_dict_and_string_workload.py",
+   "cpython": {
+    "rc": 0,
+    "out": "memo collatz: (2463, 209, 5428)\ndistinct keys: 400 most common: 42 182\ntext length: 97729 unique words: 997 w5 count: 21\nvowels: 3847 upper head: ABCDEFGHIJ\n",
+    "err": "",
+    "reps": 1,
+    "wall_min": 0.05777462200057926,
+    "wall_median": 0.05777462200057926,
+    "wall_max": 0.05777462200057926,
+    "user_median": 0.05325,
+    "sys_median": 0.004096,
+    "rss_kb": 12376
+   },
+   "zython": {
+    "rc": 0,
+    "out": "memo collatz: (2463, 209, 5428)\ndistinct keys: 400 most common: 42 182\ntext length: 97729 unique words: 997 w5 count: 21\nvowels: 3847 upper head: ABCDEFGHIJ\n",
+    "err": "",
+    "reps": 1,
+    "wall_min": 0.5392948689986952,
+    "wall_median": 0.5392948689986952,
+    "wall_max": 0.5392948689986952,
+    "user_median": 0.45383599999999996,
+    "sys_median": 0.083601,
+    "rss_kb": 208964
+   },
+   "output_match": true,
+   "speedup_median": 0.10712993080733176
+  }
+ ]
+}

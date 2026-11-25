@@ -1,0 +1,311 @@
+[
+ {
+  "file": "tests/billion_loop_bench.py",
+  "cpython": {
+   "rc": -999,
+   "wall": 90.00345980499696,
+   "rss_kb": 10092
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.003606836005928926,
+   "rss_kb": 10096
+  },
+  "zython_err": "",
+  "lines_cpython": 0,
+  "lines_zython": 11,
+  "line_diffs": 11,
+  "first_diffs": [],
+  "cpython_out_tail": "",
+  "zython_out_tail": "op Time: 0.000001 s | sum = 1000000000\n\n--- 1 BILLION ACCUMULATION (s += i) ---\n1 BILLION Accumulation Time: 0.000001 s | sum = 499999999500000000\n\n--- 100 MILLION WHILE LOOP (s += i; i += 1) ---\n100M While Loop Time: 0.000001 s | sum = 4999999950000000\n\n=== MILLION & BILLION BENCHMARK COMPLETE ===\n"
+ },
+ {
+  "file": "tests/comprehensive_bench.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 2.7063394840006367,
+   "rss_kb": 17180
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 1.969404791998386,
+   "rss_kb": 133956
+  },
+  "zython_err": "",
+  "lines_cpython": 2,
+  "lines_zython": 2,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "95000000\nBENCH_50M_LOOP: 1.881021 s, sum = 50000000\nBENCH_FIB_30: 0.162598 s, res = 832040\nBENCH_PRIMES_25K: 0.030096 s, count = 2762\nBENCH_OOP_100K: 0.021 s, acc = 9999900000\nBENCH_LIST_100K: 0.009857 s, sum = 9999900000\nBENCH_DICT_50K: 0.028039 s, sum = 3749925000\n=== BENCHMARK SUITE FINISHED ===\n",
+  "zython_out_tail": "5000000\nBENCH_50M_LOOP: 1.425205 s, sum = 50000000\nBENCH_FIB_30: 0.00462 s, res = 832040\nBENCH_PRIMES_25K: 0.041804 s, count = 2762\nBENCH_OOP_100K: 0.075453 s, acc = 9999900000\nBENCH_LIST_100K: 0.02421 s, sum = 9999900000\nBENCH_DICT_50K: 0.038644 s, sum = 3749925000\n=== BENCHMARK SUITE FINISHED ===\n"
+ },
+ {
+  "file": "tests/test_basic.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.02040920199942775,
+   "rss_kb": 10144
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.003894937995937653,
+   "rss_kb": 10096
+  },
+  "zython_err": "",
+  "lines_cpython": 26,
+  "lines_zython": 26,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "a & b = 2\na | b = 11\na ^ b = 9\na << 1 = 20\na >> 1 = 5\n--- Comparisons & Logic ---\na > b: True\na == 10: True\na != 10: False\nTrue and False: False\nTrue or False: True\nnot False: True\n--- Strings ---\nLength: 12\nUpper: HELLO ZYTHON\nLower: hello zython\nSlice [0:5]: Hello\nBasic tests passed successfully!\n",
+  "zython_out_tail": "a & b = 2\na | b = 11\na ^ b = 9\na << 1 = 20\na >> 1 = 5\n--- Comparisons & Logic ---\na > b: True\na == 10: True\na != 10: False\nTrue and False: False\nTrue or False: True\nnot False: True\n--- Strings ---\nLength: 12\nUpper: HELLO ZYTHON\nLower: hello zython\nSlice [0:5]: Hello\nBasic tests passed successfully!\n"
+ },
+ {
+  "file": "tests/test_benchmark.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.09492344000318553,
+   "rss_kb": 10172
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.007062570002744906,
+   "rss_kb": 10104
+  },
+  "zython_err": "",
+  "lines_cpython": 13,
+  "lines_zython": 13,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "7811\nTime taken: 0.0669 seconds\n\n[2] Computing prime count up to 10,000...\nPrimes below 10,000: 1229\nTime taken: 0.0082 seconds\n\n[3] List manipulations & Sorting...\nSorted first 5: [0, 1, 2, 3, 4]\nSorted last 5: [995, 996, 997, 998, 999]\nTime taken: 0.0002 seconds\n\nBenchmark completed successfully!\n",
+  "zython_out_tail": "7811\nTime taken: 0.0011 seconds\n\n[2] Computing prime count up to 10,000...\nPrimes below 10,000: 1229\nTime taken: 0.0006 seconds\n\n[3] List manipulations & Sorting...\nSorted first 5: [0, 1, 2, 3, 4]\nSorted last 5: [995, 996, 997, 998, 999]\nTime taken: 0.0018 seconds\n\nBenchmark completed successfully!\n"
+ },
+ {
+  "file": "tests/test_classes.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.021646214001521003,
+   "rss_kb": 10104
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.0044289440047577955,
+   "rss_kb": 10104
+  },
+  "zython_err": "",
+  "lines_cpython": 8,
+  "lines_zython": 8,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "Shape: Rectangle\nRectangle area (10x5): 50\nShape: Square\nSquare area (7x7): 49\nisinstance sq Square: True\nisinstance sq Rectangle: True\nisinstance sq Shape: True\nOOP tests passed successfully!\n",
+  "zython_out_tail": "Shape: Rectangle\nRectangle area (10x5): 50\nShape: Square\nSquare area (7x7): 49\nisinstance sq Square: True\nisinstance sq Rectangle: True\nisinstance sq Shape: True\nOOP tests passed successfully!\n"
+ },
+ {
+  "file": "tests/test_control.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.02017590000468772,
+   "rss_kb": 10104
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.003620036004576832,
+   "rss_kb": 10104
+  },
+  "zython_err": "",
+  "lines_cpython": 7,
+  "lines_zython": 7,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "--- If/Elif/Else ---\nScore 85 grade: B\n--- While Loop with Break/Continue ---\nSum of even numbers before 8: 12\n--- For Loop & Range ---\nSquares 0..4: [0, 1, 4, 9, 16]\nControl tests passed successfully!\n",
+  "zython_out_tail": "--- If/Elif/Else ---\nScore 85 grade: B\n--- While Loop with Break/Continue ---\nSum of even numbers before 8: 12\n--- For Loop & Range ---\nSquares 0..4: [0, 1, 4, 9, 16]\nControl tests passed successfully!\n"
+ },
+ {
+  "file": "tests/test_functions.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.019708494997757953,
+   "rss_kb": 10108
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.0033044320007320493,
+   "rss_kb": 10112
+  },
+  "zython_err": "",
+  "lines_cpython": 11,
+  "lines_zython": 11,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "--- Recursion (Factorial) ---\n5! = 120\n7! = 5040\n--- Default Arguments ---\nHello World\nWelcome to Zig\n--- Higher Order Functions & Lambda ---\nDouble twice 5: 20\n--- Closures ---\ntimes3(7) = 21\nFunction tests passed successfully!\n",
+  "zython_out_tail": "--- Recursion (Factorial) ---\n5! = 120\n7! = 5040\n--- Default Arguments ---\nHello World\nWelcome to Zig\n--- Higher Order Functions & Lambda ---\nDouble twice 5: 20\n--- Closures ---\ntimes3(7) = 21\nFunction tests passed successfully!\n"
+ },
+ {
+  "file": "tests/final_pure_tests/01_compute_and_algorithms.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.14994618399941828,
+   "rss_kb": 10480
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.0078110769973136485,
+   "rss_kb": 10112
+  },
+  "zython_err": "",
+  "lines_cpython": 4,
+  "lines_zython": 4,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "===\n1. Primes up to 15,000: Count = 1754 | Time: 0.01416 s\n2. Recursive fib(26): Result = 121393 | Time: 0.0308 s\n3. Insertion Sort (1,500 items): First = 1 Last = 1500 | Time: 0.08463 s\n4. Taylor Series exp(3.5, 30 terms): Result = 33.115452 | Time: 3e-05 s\nCompute & Algorithms benchmark complete.\n",
+  "zython_out_tail": "====\n1. Primes up to 15,000: Count = 1754 | Time: 0.00095 s\n2. Recursive fib(26): Result = 121393 | Time: 0.00043 s\n3. Insertion Sort (1,500 items): First = 1 Last = 1500 | Time: 0.00221 s\n4. Taylor Series exp(3.5, 30 terms): Result = 33.115452 | Time: 0.0 s\nCompute & Algorithms benchmark complete.\n"
+ },
+ {
+  "file": "tests/final_pure_tests/02_data_structures_and_collections.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.05977479199646041,
+   "rss_kb": 15104
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.07717756400234066,
+   "rss_kb": 53316
+  },
+  "zython_err": "",
+  "lines_cpython": 4,
+  "lines_zython": 4,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "e: 0.00822 s\n2. Dict (40k keys, get & keys/values): Sum = 1599960000 Keys = 40000 | Time: 0.01982 s\n3. Tuple (30k allocations & access): Acc = 1350045000 | Time: 0.0043 s\n4. String Methods (10k split/join/upper): Total Len = 440000 | Time: 0.00437 s\nData Structures & Collections benchmark complete.\n",
+  "zython_out_tail": ": 0.02126 s\n2. Dict (40k keys, get & keys/values): Sum = 1599960000 Keys = 40000 | Time: 0.03304 s\n3. Tuple (30k allocations & access): Acc = 1350045000 | Time: 0.00598 s\n4. String Methods (10k split/join/upper): Total Len = 440000 | Time: 0.01121 s\nData Structures & Collections benchmark complete.\n"
+ },
+ {
+  "file": "tests/final_pure_tests/03_oop_polymorphism.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.06096290300047258,
+   "rss_kb": 10276
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.15954407899698708,
+   "rss_kb": 87300
+  },
+  "zython_err": "",
+  "lines_cpython": 4,
+  "lines_zython": 4,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "======\n1. Small OOP (<=4 attributes, 50k instances): Result = 333333333400000 | Time: 0.0203 s\n2. Polymorphic Hierarchy (3 levels, 25k instances): Alive = 25000 Mana = 500000 | Time: 0.00967 s\n3. Heavy Object (>8 attributes, 15k instances): Sum = 1125600000 | Time: 0.00897 s\nOOP benchmark complete.\n",
+  "zython_out_tail": "=====\n1. Small OOP (<=4 attributes, 50k instances): Result = 333333333400000 | Time: 0.08239 s\n2. Polymorphic Hierarchy (3 levels, 25k instances): Alive = 25000 Mana = 500000 | Time: 0.04334 s\n3. Heavy Object (>8 attributes, 15k instances): Sum = 1125600000 | Time: 0.02677 s\nOOP benchmark complete.\n"
+ },
+ {
+  "file": "tests/final_pure_tests/04_loop_mechanics_ground_reality.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.7849325689967372,
+   "rss_kb": 10148
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.5843212839972693,
+   "rss_kb": 10112
+  },
+  "zython_err": "",
+  "lines_cpython": 4,
+  "lines_zython": 4,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "00000000000 | Time: 0.15094 s\n4. Multi-statement Loop (1M iterations): Result = 1000002000000 | Time: 0.08535 s\n5. Nested 2D Loop (1,000 x 1,000): Result = 249500250000 | Time: 0.05707 s\n6. Function Call in Loop (400k calls): Result = 79999800000 | Time: 0.02916 s\nLoop mechanics benchmark complete.\n",
+  "zython_out_tail": "00000000000 | Time: 0.12361 s\n4. Multi-statement Loop (1M iterations): Result = 1000002000000 | Time: 0.06293 s\n5. Nested 2D Loop (1,000 x 1,000): Result = 249500250000 | Time: 0.03796 s\n6. Function Call in Loop (400k calls): Result = 79999800000 | Time: 0.01588 s\nLoop mechanics benchmark complete.\n"
+ },
+ {
+  "file": "tests/final_pure_tests/05_edge_cases_and_issues.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.1227498150037718,
+   "rss_kb": 20784
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.0041312410030514,
+   "rss_kb": 10120
+  },
+  "zython_err": "",
+  "lines_cpython": 25,
+  "lines_zython": 25,
+  "line_diffs": 0,
+  "first_diffs": [],
+  "cpython_out_tail": "l3 = 1 gen_list = [40, 30, 20, 10]\n13. Async / Await Coroutines: asyncio.run(async_main()) = 56\n14. Native Multi-Threading & ThreadPoolExecutor: pool.submit(add_five, 10) = 15\n15. Future Scope Roadmap:\n   - Phase 9: C Extension & PyO3 Compatibility ABI\nGround reality edge-cases evaluation complete.\n",
+  "zython_out_tail": "l3 = 1 gen_list = [40, 30, 20, 10]\n13. Async / Await Coroutines: asyncio.run(async_main()) = 56\n14. Native Multi-Threading & ThreadPoolExecutor: pool.submit(add_five, 10) = 15\n15. Future Scope Roadmap:\n   - Phase 9: C Extension & PyO3 Compatibility ABI\nGround reality edge-cases evaluation complete.\n"
+ },
+ {
+  "file": "tests/final_pure_tests/06_multithreading_and_concurrency.py",
+  "cpython": {
+   "rc": 0,
+   "wall": 0.07362522899347823,
+   "rss_kb": 14848
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.008407383000303525,
+   "rss_kb": 10132
+  },
+  "zython_err": "",
+  "lines_cpython": 13,
+  "lines_zython": 13,
+  "line_diffs": 2,
+  "first_diffs": [
+   [
+    "1. Thread Initialization: name1 = Thread-1 (worker_task) | is_alive before start = False",
+    "1. Thread Initialization: name1 = Thread | is_alive before start = False"
+   ],
+   [
+    "7. ThreadPoolExecutor Map: square([1..6]) = <generator object Executor.map.<locals>.result_iterator at 0x768746c435b0>",
+    "7. ThreadPoolExecutor Map: square([1..6]) = [1, 4, 9, 16, 25, 36]"
+   ]
+  ],
+  "cpython_out_tail": "cessfully = True\n6. ThreadPoolExecutor Submit: 12^2 = 144 | 15^2 = 225 | done = True\n7. ThreadPoolExecutor Map: square([1..6]) = <generator object Executor.map.<locals>.result_iterator at 0x768746c435b0>\n8. As Completed (as_completed): [49, 64, 81]\nMulti-Threading & Concurrency evaluation complete.\n",
+  "zython_out_tail": "2\n5. Thread Signaling (threading.Event): Signaled successfully = True\n6. ThreadPoolExecutor Submit: 12^2 = 144 | 15^2 = 225 | done = True\n7. ThreadPoolExecutor Map: square([1..6]) = [1, 4, 9, 16, 25, 36]\n8. As Completed (as_completed): [49, 64, 81]\nMulti-Threading & Concurrency evaluation complete.\n"
+ },
+ {
+  "file": "tests/final_pure_tests/07_c_extensions_and_ctypes.py",
+  "cpython": {
+   "rc": 1,
+   "wall": 0.16636554700380657,
+   "rss_kb": 33940
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.0035821359997498803,
+   "rss_kb": 10140
+  },
+  "zython_err": "",
+  "lines_cpython": 0,
+  "lines_zython": 16,
+  "line_diffs": 16,
+  "first_diffs": [],
+  "cpython_out_tail": "",
+  "zython_out_tail": "representation = <module 'sample_ext'>\n   sample_ext.add(20, 22) = 42\n6. CPython C-Extension Float Call: sample_ext.multiply(2.5, 4.0) = 10.0\n7. Selective Import: add(50, 60) = 110 | multiply(3.0, 7.0) = 21.0\n8. Loop Stress Verification: total_sum = 90\nC-Extensions & ctypes FFI evaluation complete.\n"
+ },
+ {
+  "file": "tests/final_pure_tests/08_io_os_socket_and_json.py",
+  "cpython": {
+   "rc": 1,
+   "wall": 0.1587777719978476,
+   "rss_kb": 33544
+  },
+  "zython": {
+   "rc": 0,
+   "wall": 0.05508804599958239,
+   "rss_kb": 10140
+  },
+  "zython_err": "",
+  "lines_cpython": 9,
+  "lines_zython": 14,
+  "line_diffs": 5,
+  "first_diffs": [],
+  "cpython_out_tail": "===================\n1. File Writing & Lifecycle: OK (written 80 bytes)\n2. File Reading, seek() & tell(): OK (read 3 lines)\n3. File Context Manager ('with open(...)') & Iteration: OK\n4. 'os' & 'os.path' Filesystem Operations: OK\n5. 'json' dumps & loads Roundtrip: OK\n6. 'random' Module Operations: OK\n",
+  "zython_out_tail": "ndom' Module Operations: OK\n7. 'hashlib' (SHA256, MD5, SHA1) Digest Matching: OK\n8. 'socket' TCP Loopback Client/Server Echo: OK (received: ZYTHON_SOCKET_P10_PAYLOAD )\n==========================================\nTEST 8 COMPLETE: ALL 8 SUBSYSTEMS PASSED 100%\n==========================================\n"
+ }
+]

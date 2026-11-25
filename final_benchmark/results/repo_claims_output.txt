@@ -1,0 +1,74 @@
+##### 01_compute_and_algorithms  ZYTHON
+==========================================
+TEST 1: COMPUTE & ALGORITHMS BENCHMARK
+==========================================
+1. Primes up to 15,000: Count = 1754 | Time: 0.00079 s
+2. Recursive fib(26): Result = 121393 | Time: 0.00031 s
+3. Insertion Sort (1,500 items): First = 1 Last = 1500 | Time: 0.00152 s
+4. Taylor Series exp(3.5, 30 terms): Result = 33.115452 | Time: 0.0 s
+Compute & Algorithms benchmark complete.
+##### 01_compute_and_algorithms  CPYTHON
+==========================================
+TEST 1: COMPUTE & ALGORITHMS BENCHMARK
+==========================================
+1. Primes up to 15,000: Count = 1754 | Time: 0.01052 s
+2. Recursive fib(26): Result = 121393 | Time: 0.01612 s
+3. Insertion Sort (1,500 items): First = 1 Last = 1500 | Time: 0.06291 s
+4. Taylor Series exp(3.5, 30 terms): Result = 33.115452 | Time: 2e-05 s
+Compute & Algorithms benchmark complete.
+##### 02_data_structures_and_collections  ZYTHON
+==========================================
+TEST 2: DATA STRUCTURES & COLLECTIONS
+==========================================
+1. List (80k appends, sum & 10k pops): Len = 70000 Sum = 9599880000 | Time: 0.01647 s
+2. Dict (40k keys, get & keys/values): Sum = 1599960000 Keys = 40000 | Time: 0.02424 s
+3. Tuple (30k allocations & access): Acc = 1350045000 | Time: 0.00492 s
+4. String Methods (10k split/join/upper): Total Len = 440000 | Time: 0.0084 s
+Data Structures & Collections benchmark complete.
+##### 02_data_structures_and_collections  CPYTHON
+==========================================
+TEST 2: DATA STRUCTURES & COLLECTIONS
+==========================================
+1. List (80k appends, sum & 10k pops): Len = 70000 Sum = 9599880000 | Time: 0.00668 s
+2. Dict (40k keys, get & keys/values): Sum = 1599960000 Keys = 40000 | Time: 0.01486 s
+3. Tuple (30k allocations & access): Acc = 1350045000 | Time: 0.00301 s
+4. String Methods (10k split/join/upper): Total Len = 440000 | Time: 0.00361 s
+Data Structures & Collections benchmark complete.
+##### 03_oop_polymorphism  ZYTHON
+==========================================
+TEST 3: OBJECT-ORIENTED PROGRAMMING & INHERITANCE
+==========================================
+1. Small OOP (<=4 attributes, 50k instances): Result = 333333333400000 | Time: 0.03767 s
+2. Polymorphic Hierarchy (3 levels, 25k instances): Alive = 25000 Mana = 500000 | Time: 0.02236 s
+3. Heavy Object (>8 attributes, 15k instances): Sum = 1125600000 | Time: 0.01349 s
+OOP benchmark complete.
+##### 03_oop_polymorphism  CPYTHON
+==========================================
+TEST 3: OBJECT-ORIENTED PROGRAMMING & INHERITANCE
+==========================================
+1. Small OOP (<=4 attributes, 50k instances): Result = 333333333400000 | Time: 0.01911 s
+2. Polymorphic Hierarchy (3 levels, 25k instances): Alive = 25000 Mana = 500000 | Time: 0.00771 s
+3. Heavy Object (>8 attributes, 15k instances): Sum = 1125600000 | Time: 0.00672 s
+OOP benchmark complete.
+##### 04_loop_mechanics_ground_reality  ZYTHON
+==========================================
+TEST 4: LOOP MECHANICS & GROUND REALITY
+==========================================
+1. Pattern-Matched Loop (for i in range(10M): s += 1): Result = 10000000 | Time: 0.211061 s
+2. Unspecialized Simple Loop (for i in range(2M): s = s + 1): Result = 2000000 | Time: 0.04273 s
+3. Branching Loop (2M iterations with if/else): Result = 1000000000000 | Time: 0.09173 s
+4. Multi-statement Loop (1M iterations): Result = 1000002000000 | Time: 0.04498 s
+5. Nested 2D Loop (1,000 x 1,000): Result = 249500250000 | Time: 0.02829 s
+6. Function Call in Loop (400k calls): Result = 79999800000 | Time: 0.01147 s
+Loop mechanics benchmark complete.
+##### 04_loop_mechanics_ground_reality  CPYTHON
+==========================================
+TEST 4: LOOP MECHANICS & GROUND REALITY
+==========================================
+1. Pattern-Matched Loop (for i in range(10M): s += 1): Result = 10000000 | Time: 0.271513 s
+2. Unspecialized Simple Loop (for i in range(2M): s = s + 1): Result = 2000000 | Time: 0.05371 s
+3. Branching Loop (2M iterations with if/else): Result = 1000000000000 | Time: 0.1156 s
+4. Multi-statement Loop (1M iterations): Result = 1000002000000 | Time: 0.07065 s
+5. Nested 2D Loop (1,000 x 1,000): Result = 249500250000 | Time: 0.04267 s
+6. Function Call in Loop (400k calls): Result = 79999800000 | Time: 0.02169 s
+Loop mechanics benchmark complete.

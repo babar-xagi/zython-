@@ -1,0 +1,30 @@
+{
+ "launch_floor_true_ms": 0.5754348199843662,
+ "cpython_empty": {
+  "per_launch_ms": 14.03083961001054,
+  "minus_floor_ms": 13.455404790026174,
+  "rss_kb": 9736
+ },
+ "cpython_hello": {
+  "per_launch_ms": 14.045007296663243,
+  "minus_floor_ms": 13.469572476678877,
+  "rss_kb": 9748
+ },
+ "zython_empty": {
+  "per_launch_ms": 1.6188721700018505,
+  "minus_floor_ms": 1.0434373500174843,
+  "rss_kb": 4164
+ },
+ "zython_hello": {
+  "per_launch_ms": 1.6562285666683845,
+  "minus_floor_ms": 1.0807937466840183,
+  "rss_kb": 4160
+ },
+ "cpython_isolated_empty": {
+  "per_launch_ms": 9.025822640008604,
+  "rss_kb": 0
+ },
+ "zython_binary_bytes": 6584072,
+ "zython_ldd": "\tlinux-vdso.so.1 (0x0000765eac631000)\n\tlibc.so.6 => /usr/lib/x86_64-linux-gnu/libc.so.6 (0x0000765eac400000)\n\t/lib64/ld-linux-x86-64.so.2 (0x0000765eac633000)\n",
+ "zython_file": "/home/xagi/Desktop/zig_com/zython-/final_benchmark/../zig-out/bin/zython: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, with debug_info, not stripped\n"
+}

@@ -1,0 +1,165 @@
+Features valid in CPython probed: 255  supported by Zython: 107  unsupported: 148
+
+[list] 9 unsupported:
+    [1,2].extend([3])
+    [1,2].insert(0,5)
+    [1,2].remove(1)
+    [2,1].sort()
+    [1,2].reverse()
+    [1,2].index(2)
+    [1,2].count(1)
+    [1,2].copy()
+    [1,2].clear()
+
+[str] 21 unsupported:
+    ' a '.strip()
+    ' a '.lstrip()
+    ' a '.rstrip()
+    'abc'.find('b')
+    'abc'.replace('a','b')
+    '12'.isdigit()
+    'ab'.isalpha()
+    'a'.count('a')
+    'a'.title()
+    'a'.capitalize()
+    'a'.center(5)
+    'a'.ljust(5)
+    'a'.rjust(5)
+    'a'.zfill(5)
+    'a=b'.partition('=')
+    'a\nb'.splitlines()
+    '{}'.format(1)
+    'a'.encode()
+    'abc'.index('b')
+    'a'.isupper()
+    'a b'.rsplit()
+
+[dict] 7 unsupported:
+    {'a':1}.items()
+    {'a':1}.pop('a')
+    {'a':1}.update({'b':2})
+    {'a':1}.setdefault('b',2)
+    {'a':1}.copy()
+    {'a':1}.clear()
+    {'a':1}.popitem()
+
+[set] 7 unsupported:
+    {1}.discard(1)
+    {1}|{2}
+    {1}&{1}
+    {1}-{1}
+    sorted({2,1})
+    {1}.union({2})
+    {1}.issubset({1,2})
+
+[builtin] 24 unsupported:
+    map(str,[1])
+    filter(None,[1])
+    any([1])
+    all([1])
+    isinstance(1,int)
+    isinstance(1,(int,str))
+    divmod(5,2)
+    hex(5)
+    bin(5)
+    oct(5)
+    hash(1)
+    id(1)
+    getattr(1,'real')
+    hasattr(1,'real')
+    range(3)[1]
+    input
+    complex(1,2)
+    bytes([1])
+    bytearray(1)
+    frozenset([1])
+    super
+    staticmethod
+    classmethod
+    property
+
+[math] 19 unsupported:
+    math.tan(1)
+    math.atan(1)
+    math.atan2(1,1)
+    math.exp(1)
+    math.log(2)
+    math.log10(2)
+    math.log2(2)
+    math.pow(2,2)
+    math.fabs(-1)
+    math.gcd(4,6)
+    math.factorial(5)
+    math.hypot(3,4)
+    math.isqrt(9)
+    math.isnan(1.0)
+    math.trunc(1.5)
+    math.fmod(5,3)
+    math.degrees(1)
+    math.radians(1)
+    math.comb(5,2)
+
+[syntax] 13 unsupported:
+    (lambda *a: a)(1)
+    {x: x for x in range(3)}
+    {x for x in range(3)}
+    (x for x in range(3))
+    [(i,j) for i in range(2) for j in range(2)]
+    (y := 3)
+    1 not in [1]
+    '%d' % 5
+    True + 1
+    [*range(3)]
+    {**{'a':1}}
+    print(*[1,2])
+    3j
+
+[stmt] 48 unsupported:
+    def f():\n    return 1, 2\nf()
+    a, *b = [1,2,3]
+    def f(*, k=1):\n    pass
+    def f():\n    x = 1\n    def g():\n        nonlocal x\n        x = 2\n    g()\nf()
+    class A:\n    @staticmethod\n    def f():\n        return 1\nA.f()
+    class A:\n    @property\n    def p(self):\n        return 1\nA().p
+    class A:\n    def __init__(self):\n        pass\nclass B(A):\n    def __init__(self):\n        super().__init_
+    class A:\n    def __add__(self, o):\n        return 1\nA() + A()
+    class A:\n    def __len__(self):\n        return 3\nlen(A())
+    class A:\n    def __getitem__(self, i):\n        return i\nA()[1]
+    class A:\n    def __iter__(self):\n        return iter([1])\nlist(A())
+    class A:\n    def __call__(self):\n        return 1\nA()()
+    try:\n    raise ValueError('x')\nexcept ValueError as e:\n    pass
+    try:\n    int('x')\nexcept ValueError:\n    pass
+    del [1][0:0]
+    x = [1,2]\ndel x[0]
+    import collections
+    import itertools
+    import functools
+    import re
+    import string
+    import heapq
+    import bisect
+    import typing
+    import dataclasses
+    import fractions
+    import decimal
+    import statistics
+    import array
+    import copy
+    import operator
+    import abc
+    import enum
+    import pathlib
+    import datetime
+    import struct
+    import io
+    import csv
+    import subprocess
+    import argparse
+    import logging
+    import unittest
+    import queue
+    import multiprocessing
+    match 1:\n    case 1:\n        pass
+    def g():\n    yield from [1]\nlist(g())
+    print(__name__)
+    if __name__ == '__main__':\n    pass

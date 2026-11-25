@@ -1,0 +1,441 @@
+{
+ "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+ "reps": 5,
+ "results": [
+  {
+   "name": "p01_recursive_fibonacci.py",
+   "cpython": {
+    "rc": 0,
+    "out": "fib(30) = 832040\nackermann(2, 200) = 403\ntak(18, 12, 6) = 7\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.13152794900088338,
+    "wall_median": 0.13801307499670656,
+    "wall_max": 0.15059271900099702,
+    "user_median": 0.133135,
+    "sys_median": 0.003973,
+    "rss_kb": 9816
+   },
+   "zython": {
+    "rc": 0,
+    "out": "fib(30) = 832040\nackermann(2, 200) = 403\ntak(18, 12, 6) = 7\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.1685912679968169,
+    "wall_median": 0.173752467999293,
+    "wall_max": 0.1824118350050412,
+    "user_median": 0.171182,
+    "sys_median": 0.003958,
+    "rss_kb": 4416
+   },
+   "output_match": true,
+   "speedup_median": 0.7943085734889713
+  },
+  {
+   "name": "p02_collatz_longest_chain.py",
+   "cpython": {
+    "rc": 0,
+    "out": "longest collatz below 100000: 77031 351\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.725160418995074,
+    "wall_median": 0.7482336780012702,
+    "wall_max": 0.8062866649997886,
+    "user_median": 0.743865,
+    "sys_median": 0.004003,
+    "rss_kb": 9764
+   },
+   "zython": {
+    "rc": 0,
+    "out": "longest collatz below 100000: 77031 351\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.8615002810038277,
+    "wall_median": 0.8897829490015283,
+    "wall_max": 0.941093738998461,
+    "user_median": 0.889412,
+    "sys_median": 0.0,
+    "rss_kb": 4292
+   },
+   "output_match": true,
+   "speedup_median": 0.8409170785312329
+  },
+  {
+   "name": "p03_sieve_and_prime_sums.py",
+   "cpython": {
+    "rc": 0,
+    "out": "primes <= 2,000,000: 148933\nsum of primes: 142913828922\ntwin prime pairs: 14872\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.4524566680047428,
+    "wall_median": 0.4530441789975157,
+    "wall_max": 0.4742822909975075,
+    "user_median": 0.44465499999999997,
+    "sys_median": 0.008007,
+    "rss_kb": 25380
+   },
+   "zython": {
+    "rc": 0,
+    "out": "primes <= 2,000,000: 148933\nsum of primes: 142913828922\ntwin prime pairs: 14872\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.36642957399453735,
+    "wall_median": 0.37762551700143376,
+    "wall_max": 0.3964858830004232,
+    "user_median": 0.35569,
+    "sys_median": 0.031929,
+    "rss_kb": 92740
+   },
+   "output_match": true,
+   "speedup_median": 1.1997181297359087
+  },
+  {
+   "name": "p04_mandelbrot_float.py",
+   "cpython": {
+    "rc": 0,
+    "out": "inside points: 3812\ntotal iterations: 849452\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.10950051100371638,
+    "wall_median": 0.11778187099844217,
+    "wall_max": 0.12201135200302815,
+    "user_median": 0.109292,
+    "sys_median": 0.00401,
+    "rss_kb": 10136
+   },
+   "zython": {
+    "rc": 0,
+    "out": "inside points: 3812\ntotal iterations: 849452\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.11277997399884043,
+    "wall_median": 0.1366207340033725,
+    "wall_max": 0.14389237399882404,
+    "user_median": 0.13225699999999999,
+    "sys_median": 0.003994999999999999,
+    "rss_kb": 4420
+   },
+   "output_match": true,
+   "speedup_median": 0.8621083165570954
+  },
+  {
+   "name": "p05_matrix_multiply_mod.py",
+   "cpython": {
+    "rc": 0,
+    "out": "trace: 45044799\nchecksum: 706323705\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.10547363299701829,
+    "wall_median": 0.10955081199790584,
+    "wall_max": 0.12411819299450144,
+    "user_median": 0.10138799999999999,
+    "sys_median": 0.0077989999999999995,
+    "rss_kb": 10888
+   },
+   "zython": {
+    "rc": 0,
+    "out": "trace: 45044799\nchecksum: 706323705\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.09433091900427826,
+    "wall_median": 0.09586344799754443,
+    "wall_max": 0.10102754699619254,
+    "user_median": 0.089337,
+    "sys_median": 0.007840999999999999,
+    "rss_kb": 11076
+   },
+   "output_match": true,
+   "speedup_median": 1.142779800708942
+  },
+  {
+   "name": "p06_miller_rabin_modpow.py",
+   "cpython": {
+    "rc": 0,
+    "out": "MR primes in [1e9, 1e9+60000): 2896 last: 1000059989\n2^1000003 mod 1000000007 = 880336465\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.16081290100555634,
+    "wall_median": 0.16797973899520002,
+    "wall_max": 0.17783932799648028,
+    "user_median": 0.163648,
+    "sys_median": 0.004024,
+    "rss_kb": 9916
+   },
+   "zython": {
+    "rc": 0,
+    "out": "MR primes in [1e9, 1e9+60000): 2896 last: 1000059989\n2^1000003 mod 1000000007 = 880336465\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.11019982399739092,
+    "wall_median": 0.11913239699788392,
+    "wall_max": 0.12983110300410772,
+    "user_median": 0.11873099999999999,
+    "sys_median": 0.003961,
+    "rss_kb": 9284
+   },
+   "output_match": true,
+   "speedup_median": 1.4100256792296704
+  },
+  {
+   "name": "p07_monte_carlo_lcg_pi.py",
+   "cpython": {
+    "rc": 0,
+    "out": "inside: 471450\npi estimate: 3.143\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.4431488550035283,
+    "wall_median": 0.4664918869966641,
+    "wall_max": 0.4869007870001951,
+    "user_median": 0.46198,
+    "sys_median": 0.004024,
+    "rss_kb": 10020
+   },
+   "zython": {
+    "rc": 0,
+    "out": "inside: 471450\npi estimate: 3.143\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.24190087500028312,
+    "wall_median": 0.2425743869971484,
+    "wall_max": 0.29540635499870405,
+    "user_median": 0.24220599999999998,
+    "sys_median": 0.003957,
+    "rss_kb": 4356
+   },
+   "output_match": true,
+   "speedup_median": 1.9230879763169224
+  },
+  {
+   "name": "p08_numerical_calculus.py",
+   "cpython": {
+    "rc": 0,
+    "out": "simpson poly: 1933.333333\nsimpson sin*cos: 0.009957428\nsum newton sqrt: 1885688.586251\ntaylor e^3.5 sum: 165577.2598\nleibniz pi: 3.141591654\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.2090514359952067,
+    "wall_median": 0.22590671299985843,
+    "wall_max": 0.24425461399368942,
+    "user_median": 0.21364899999999998,
+    "sys_median": 0.004013,
+    "rss_kb": 10644
+   },
+   "zython": {
+    "rc": 0,
+    "out": "simpson poly: 1933.333333\nsimpson sin*cos: 0.009957428\nsum newton sqrt: 1885688.586251\ntaylor e^3.5 sum: 165577.2598\nleibniz pi: 3.141591654\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.17186902499815915,
+    "wall_median": 0.19626912500098115,
+    "wall_max": 0.19998998699884396,
+    "user_median": 0.191905,
+    "sys_median": 0.003988,
+    "rss_kb": 5188
+   },
+   "output_match": true,
+   "speedup_median": 1.1510048409230393
+  },
+  {
+   "name": "p09_dynamic_programming.py",
+   "cpython": {
+    "rc": 0,
+    "out": "LCS length: 900\nedit distance: 0\nknapsack: 6252\ncoin ways: 403731841\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.2009016019947012,
+    "wall_median": 0.20796781800163444,
+    "wall_max": 0.22546690599847352,
+    "user_median": 0.19960899999999998,
+    "sys_median": 0.007984,
+    "rss_kb": 19620
+   },
+   "zython": {
+    "rc": 0,
+    "out": "LCS length: 900\nedit distance: 0\nknapsack: 6252\ncoin ways: 403731841\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.2799921749974601,
+    "wall_median": 0.29275520000373945,
+    "wall_max": 0.2947307899958105,
+    "user_median": 0.256183,
+    "sys_median": 0.032022,
+    "rss_kb": 68036
+   },
+   "output_match": true,
+   "speedup_median": 0.7103812946754763
+  },
+  {
+   "name": "p10_nqueens_backtracking.py",
+   "cpython": {
+    "rc": 0,
+    "out": "queens(8) = 92\nqueens(9) = 352\nqueens(10) = 724\nsubset_count = 1968\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.04986198899860028,
+    "wall_median": 0.05183221699553542,
+    "wall_max": 0.059592523000901565,
+    "user_median": 0.047512,
+    "sys_median": 0.003946,
+    "rss_kb": 9888
+   },
+   "zython": {
+    "rc": 0,
+    "out": "queens(8) = 92\nqueens(9) = 352\nqueens(10) = 724\nsubset_count = 1968\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.05789339899638435,
+    "wall_median": 0.058082103001652285,
+    "wall_max": 0.060318934003589675,
+    "user_median": 0.053736,
+    "sys_median": 0.0039829999999999996,
+    "rss_kb": 5824
+   },
+   "output_match": true,
+   "speedup_median": 0.8923956660808395
+  },
+  {
+   "name": "p11_sorting_algorithms.py",
+   "cpython": {
+    "rc": 0,
+    "out": "quicksort: True 128274692\nmergesort: True 128274692\nheapsort: True 128274692\ninsertion: True 831142341\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 1.4155761589936446,
+    "wall_median": 1.452632471002289,
+    "wall_max": 1.508525624005415,
+    "user_median": 1.444168,
+    "sys_median": 0.011975,
+    "rss_kb": 19828
+   },
+   "zython": {
+    "rc": 0,
+    "out": "quicksort: True 128274692\nmergesort: True 128274692\nheapsort: True 128274692\ninsertion: True 831142341\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 2.3712513009959366,
+    "wall_median": 2.673163539999223,
+    "wall_max": 2.7741565339965746,
+    "user_median": 2.210432,
+    "sys_median": 0.343612,
+    "rss_kb": 657092
+   },
+   "output_match": true,
+   "speedup_median": 0.5434132439958056
+  },
+  {
+   "name": "p12_number_theory_gcd_totient.py",
+   "cpython": {
+    "rc": 0,
+    "out": "sum gcd(a,b) a,b<700: 2062756\ntotient sum n=300000: 27356748484\ndigit sum of squares: 13579430\nperfect numbers: [6, 28, 496, 8128]\namicable pairs: 20\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 1.0483789090067148,
+    "wall_median": 1.0642783299990697,
+    "wall_max": 1.3797819640021771,
+    "user_median": 1.059822,
+    "sys_median": 0.003999,
+    "rss_kb": 21732
+   },
+   "zython": {
+    "rc": 0,
+    "out": "sum gcd(a,b) a,b<700: 2062756\ntotient sum n=300000: 27356748484\ndigit sum of squares: 13579430\nperfect numbers: [6, 28, 496, 8128]\namicable pairs: 20\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.982862999997451,
+    "wall_median": 0.9902583559960476,
+    "wall_max": 1.0229934029994183,
+    "user_median": 0.9818169999999999,
+    "sys_median": 0.008014,
+    "rss_kb": 28484
+   },
+   "output_match": true,
+   "speedup_median": 1.074748143809975
+  },
+  {
+   "name": "p13_oop_particle_simulation.py",
+   "cpython": {
+    "rc": 0,
+    "out": "steps: 300000\nbounces: 307\nenergy: 10655.3798\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.11717900399526116,
+    "wall_median": 0.11985504000040237,
+    "wall_max": 0.13447534100123448,
+    "user_median": 0.112768,
+    "sys_median": 0.004027,
+    "rss_kb": 10284
+   },
+   "zython": {
+    "rc": 0,
+    "out": "steps: 300000\nbounces: 307\nenergy: 10655.3798\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.1649283579972689,
+    "wall_median": 0.16936671800067415,
+    "wall_max": 0.1705077340011485,
+    "user_median": 0.164935,
+    "sys_median": 0.003954,
+    "rss_kb": 5188
+   },
+   "output_match": true,
+   "speedup_median": 0.7076658355033206
+  },
+  {
+   "name": "p14_dict_and_string_workload.py",
+   "cpython": {
+    "rc": 0,
+    "out": "memo collatz: (2463, 209, 5428)\ndistinct keys: 400 most common: 42 182\ntext length: 97729 unique words: 997 w5 count: 21\nvowels: 3847 upper head: ABCDEFGHIJ\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.0741874369996367,
+    "wall_median": 0.07628036600362975,
+    "wall_max": 0.08188694400450913,
+    "user_median": 0.07452,
+    "sys_median": 0.004072,
+    "rss_kb": 12464
+   },
+   "zython": {
+    "rc": 0,
+    "out": "memo collatz: (2463, 209, 5428)\ndistinct keys: 400 most common: 42 182\ntext length: 97729 unique words: 997 w5 count: 21\nvowels: 3847 upper head: ABCDEFGHIJ\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.6162204100037343,
+    "wall_median": 0.6555873599936604,
+    "wall_max": 0.7489234640015638,
+    "user_median": 0.5358499999999999,
+    "sys_median": 0.128605,
+    "rss_kb": 208964
+   },
+   "output_match": true,
+   "speedup_median": 0.11635423539033363
+  },
+  {
+   "name": "p15_gameoflife_and_grid.py",
+   "cpython": {
+    "rc": 0,
+    "out": "alive after 60 generations: 421\ncomponents, biggest: (158, 13)\ncomponents in random 300x300: (11153, 62)\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.1328120559992385,
+    "wall_median": 0.1357693969985121,
+    "wall_max": 0.14467552099813474,
+    "user_median": 0.128167,
+    "sys_median": 0.007956999999999999,
+    "rss_kb": 11376
+   },
+   "zython": {
+    "rc": 0,
+    "out": "alive after 60 generations: 421\ncomponents, biggest: (158, 13)\ncomponents in random 300x300: (11153, 62)\n",
+    "err": "",
+    "reps": 5,
+    "wall_min": 0.213042975999997,
+    "wall_median": 0.239058439998189,
+    "wall_max": 0.2704276779986685,
+    "user_median": 0.202877,
+    "sys_median": 0.027784,
+    "rss_kb": 80576
+   },
+   "output_match": true,
+   "speedup_median": 0.5679339202562379
+  }
+ ]
+}
